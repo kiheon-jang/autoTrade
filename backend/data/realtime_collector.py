@@ -154,26 +154,32 @@ class RealtimeDataCollector:
                 await asyncio.sleep(5)
     
     async def _fetch_bithumb_data(self, symbol: str) -> Optional[Dict]:
-        """빗썸 데이터 수집"""
+        """빗썸 데이터 수집 - 실제 API 사용"""
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.bithumb_api}/ticker/{symbol}"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return {
-                            'exchange': 'bithumb',
-                            'symbol': symbol,
-                            'price': float(data['data']['closing_price']),
-                            'volume': float(data['data']['acc_trade_value_24H']),
-                            'timestamp': datetime.now()
-                        }
+            # 빗썸 클라이언트를 사용한 실제 API 호출
+            ticker_data = await self.bithumb_client.get_ticker(symbol)
+            
+            if ticker_data and 'data' in ticker_data:
+                data = ticker_data['data']
+                return {
+                    'exchange': 'bithumb',
+                    'symbol': symbol,
+                    'price': float(data.get('closing_price', 0)),
+                    'volume': float(data.get('acc_trade_value_24H', 0)),
+                    'bid': float(data.get('buy_price', 0)),
+                    'ask': float(data.get('sell_price', 0)),
+                    'high': float(data.get('max_price', 0)),
+                    'low': float(data.get('min_price', 0)),
+                    'change': float(data.get('fluctate_24H', 0)),
+                    'change_rate': float(data.get('fluctate_rate_24H', 0)),
+                    'timestamp': datetime.now()
+                }
         except Exception as e:
             self.logger.error(f"빗썸 데이터 수집 오류: {e}")
         return None
     
     async def _fetch_upbit_data(self, symbol: str) -> Optional[Dict]:
-        """업비트 데이터 수집"""
+        """업비트 데이터 수집 - 실제 API 사용"""
         try:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.upbit_api}/ticker"
@@ -186,8 +192,14 @@ class RealtimeDataCollector:
                             return {
                                 'exchange': 'upbit',
                                 'symbol': symbol,
-                                'price': float(ticker['trade_price']),
-                                'volume': float(ticker['acc_trade_volume_24h']),
+                                'price': float(ticker.get('trade_price', 0)),
+                                'volume': float(ticker.get('acc_trade_volume_24h', 0)),
+                                'bid': float(ticker.get('highest_bid_price', 0)),
+                                'ask': float(ticker.get('lowest_ask_price', 0)),
+                                'high': float(ticker.get('high_price', 0)),
+                                'low': float(ticker.get('low_price', 0)),
+                                'change': float(ticker.get('signed_change_price', 0)),
+                                'change_rate': float(ticker.get('signed_change_rate', 0)),
                                 'timestamp': datetime.now()
                             }
         except Exception as e:
@@ -195,7 +207,7 @@ class RealtimeDataCollector:
         return None
     
     async def _fetch_binance_data(self, symbol: str) -> Optional[Dict]:
-        """바이낸스 데이터 수집"""
+        """바이낸스 데이터 수집 - 실제 API 사용"""
         try:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.binance_api}/ticker/24hr"
@@ -206,8 +218,14 @@ class RealtimeDataCollector:
                         return {
                             'exchange': 'binance',
                             'symbol': symbol,
-                            'price': float(data['lastPrice']),
-                            'volume': float(data['volume']),
+                            'price': float(data.get('lastPrice', 0)),
+                            'volume': float(data.get('volume', 0)),
+                            'bid': float(data.get('bidPrice', 0)),
+                            'ask': float(data.get('askPrice', 0)),
+                            'high': float(data.get('highPrice', 0)),
+                            'low': float(data.get('lowPrice', 0)),
+                            'change': float(data.get('priceChange', 0)),
+                            'change_rate': float(data.get('priceChangePercent', 0)),
                             'timestamp': datetime.now()
                         }
         except Exception as e:
