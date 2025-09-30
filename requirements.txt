@@ -7,9 +7,9 @@ pydantic-settings==2.1.0
 # Database
 sqlalchemy==2.0.23
 alembic==1.13.1
-psycopg2-binary==2.9.9
-redis==5.0.1
-timescaledb==0.0.4
+# psycopg2-binary==2.9.9  # PostgreSQL 드라이버 (로컬 개발용으로 비활성화)
+# redis==5.0.1  # Redis (로컬 개발용으로 비활성화)
+# timescaledb==0.0.4  # TimescaleDB (로컬 개발용으로 비활성화)
 
 # Async and Background Tasks
 celery==5.3.4
@@ -24,7 +24,7 @@ websockets==12.0
 pandas>=2.2.0
 numpy>=1.26.0
 ta>=0.10.2
-talib>=0.4.28
+# talib>=0.4.28  # 로컬 개발용으로 비활성화 (설치 복잡)
 
 # Authentication and Security
 python-jose[cryptography]==3.3.0

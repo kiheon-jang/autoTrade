@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from core.config import settings
-from api import auth, trading, strategy, monitoring, analysis, backtesting, realtime_trading
+from api import trading, monitoring, analysis, backtesting, realtime_trading, ai_recommendation
 
 
 @asynccontextmanager
@@ -52,13 +52,12 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["인증"])
 app.include_router(trading.router, prefix="/api/v1/trading", tags=["거래"])
-app.include_router(strategy.router, prefix="/api/v1/strategy", tags=["전략"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["모니터링"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["분석"])
 app.include_router(backtesting.router, prefix="/api/v1/backtesting", tags=["백테스팅"])
 app.include_router(realtime_trading.router, prefix="/api/v1/realtime", tags=["실시간거래"])
+app.include_router(ai_recommendation.router, prefix="/api/v1/ai", tags=["AI추천"])
 
 
 @app.get("/")
@@ -81,7 +80,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8008,
         reload=True,
         log_level="info"
     )

@@ -4,8 +4,8 @@
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import QueuePool
-import redis
+# from sqlalchemy.pool import QueuePool  # SQLite에서는 불필요
+# import redis  # 로컬 개발용으로 비활성화
 from typing import Generator
 import logging
 
@@ -13,32 +13,27 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# PostgreSQL 데이터베이스 엔진
+# SQLite 데이터베이스 엔진 (로컬 개발용)
 engine = create_engine(
     settings.DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    echo=settings.DEBUG
+    echo=settings.DEBUG,
+    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
 )
 
-# TimescaleDB 엔진 (시계열 데이터용)
+# SQLite Timescale 엔진 (시계열 데이터용)
 timescale_engine = create_engine(
     settings.TIMESCALE_URL,
-    poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    echo=settings.DEBUG
+    echo=settings.DEBUG,
+    connect_args={"check_same_thread": False} if "sqlite" in settings.TIMESCALE_URL else {}
 )
 
 # 세션 팩토리
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 TimescaleSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=timescale_engine)
 
-# Redis 연결
-redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+# Redis 연결 (로컬 개발용으로 비활성화)
+# redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+redis_client = None  # 로컬 개발용으로 비활성화
 
 # 베이스 클래스
 Base = declarative_base()
@@ -63,8 +58,8 @@ def get_timescale_db() -> Generator:
         db.close()
 
 
-def get_redis() -> redis.Redis:
-    """Redis 클라이언트 반환"""
+def get_redis():
+    """Redis 클라이언트 반환 (로컬 개발용으로 None 반환)"""
     return redis_client
 
 
