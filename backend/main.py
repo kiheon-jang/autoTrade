@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
+import asyncio
+import logging
 
 from core.config import settings
 from api import auth, trading, strategy, monitoring, analysis, backtesting, realtime_trading
@@ -15,8 +17,20 @@ async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
     # 시작 시 초기화 작업
     print("🚀 빗썸 자동매매 시스템 시작")
+    
+    # 실시간 데이터 브로드캐스트 백그라운드 태스크 시작
+    from api.monitoring import broadcast_realtime_data
+    broadcast_task = asyncio.create_task(broadcast_realtime_data())
+    print("📡 실시간 데이터 브로드캐스트 시작")
+    
     yield
+    
     # 종료 시 정리 작업
+    broadcast_task.cancel()
+    try:
+        await broadcast_task
+    except asyncio.CancelledError:
+        pass
     print("🛑 빗썸 자동매매 시스템 종료")
 
 

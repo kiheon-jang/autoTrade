@@ -13,6 +13,14 @@ import websockets
 import logging
 from concurrent.futures import ThreadPoolExecutor
 import time
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from services.bithumb_client import BithumbClient
+from dotenv import load_dotenv
+
+# 환경 변수 로드
+load_dotenv(os.path.join(os.path.dirname(__file__), '../../.env'))
 
 
 @dataclass
@@ -59,6 +67,15 @@ class RealtimeDataCollector:
         self.data_buffer = {}
         self.subscribers = {}
         self.running = False
+        # 환경 변수에서 API 키 로드
+        api_key = os.getenv('BITHUMB_API_KEY')
+        secret_key = os.getenv('BITHUMB_SECRET_KEY')
+        
+        if not api_key or not secret_key:
+            self.logger.warning("빗썸 API 키가 설정되지 않았습니다. 공개 API만 사용 가능합니다.")
+            self.bithumb_client = BithumbClient()
+        else:
+            self.bithumb_client = BithumbClient(api_key, secret_key)
         
         # API 엔드포인트
         self.bithumb_api = "https://api.bithumb.com/public"
@@ -88,20 +105,18 @@ class RealtimeDataCollector:
         self.running = True
         self.symbols = symbols
         
-        # 각 데이터 타입별 수집 태스크 시작
-        tasks = []
-        
+        # 각 데이터 타입별 수집 태스크를 백그라운드에서 시작
         if 'market' in data_types:
-            tasks.append(self._collect_market_data())
+            asyncio.create_task(self._collect_market_data())
         
         if 'news' in data_types:
-            tasks.append(self._collect_news_data())
+            asyncio.create_task(self._collect_news_data())
         
         if 'social' in data_types:
-            tasks.append(self._collect_social_sentiment())
+            asyncio.create_task(self._collect_social_sentiment())
         
-        # 모든 태스크 병렬 실행
-        await asyncio.gather(*tasks)
+        # 데이터 수집이 시작되었음을 알림
+        self.logger.info(f"데이터 수집 시작: {symbols}, 타입: {data_types}")
     
     async def _collect_market_data(self):
         """시장 데이터 수집"""
@@ -109,19 +124,28 @@ class RealtimeDataCollector:
             try:
                 for symbol in self.symbols:
                     # 빗썸 데이터
-                    bithumb_data = await self._fetch_bithumb_data(symbol)
-                    if bithumb_data:
-                        await self._process_market_data(bithumb_data)
+                    try:
+                        bithumb_data = await self._fetch_bithumb_data(symbol)
+                        if bithumb_data:
+                            await self._process_market_data(bithumb_data)
+                    except Exception as e:
+                        self.logger.warning(f"빗썸 데이터 수집 실패: {e}")
                     
                     # 업비트 데이터
-                    upbit_data = await self._fetch_upbit_data(symbol)
-                    if upbit_data:
-                        await self._process_market_data(upbit_data)
+                    try:
+                        upbit_data = await self._fetch_upbit_data(symbol)
+                        if upbit_data:
+                            await self._process_market_data(upbit_data)
+                    except Exception as e:
+                        self.logger.warning(f"업비트 데이터 수집 실패: {e}")
                     
                     # 바이낸스 데이터
-                    binance_data = await self._fetch_binance_data(symbol)
-                    if binance_data:
-                        await self._process_market_data(binance_data)
+                    try:
+                        binance_data = await self._fetch_binance_data(symbol)
+                        if binance_data:
+                            await self._process_market_data(binance_data)
+                    except Exception as e:
+                        self.logger.warning(f"바이낸스 데이터 수집 실패: {e}")
                 
                 await asyncio.sleep(1)  # 1초 간격
                 
@@ -396,6 +420,33 @@ class RealtimeDataCollector:
             if data_type == 'market':
                 return self.data_buffer[symbol][-1] if self.data_buffer[symbol] else None
         return None
+    
+    async def get_bithumb_ticker(self, symbol: str) -> Optional[Dict]:
+        """빗썸 티커 데이터 수집"""
+        try:
+            ticker_data = await self.bithumb_client.get_ticker(symbol)
+            return ticker_data
+        except Exception as e:
+            self.logger.error(f"빗썸 티커 데이터 수집 실패: {e}")
+            return None
+    
+    async def get_bithumb_orderbook(self, symbol: str) -> Optional[Dict]:
+        """빗썸 호가 데이터 수집"""
+        try:
+            orderbook_data = await self.bithumb_client.get_orderbook(symbol)
+            return orderbook_data
+        except Exception as e:
+            self.logger.error(f"빗썸 호가 데이터 수집 실패: {e}")
+            return None
+    
+    async def get_bithumb_balance(self) -> Optional[Dict]:
+        """빗썸 잔고 조회"""
+        try:
+            balance_data = await self.bithumb_client.get_balance()
+            return balance_data
+        except Exception as e:
+            self.logger.error(f"빗썸 잔고 조회 실패: {e}")
+            return None
     
     def get_historical_data(self, symbol: str, hours: int = 24) -> List[Dict]:
         """과거 데이터 조회"""

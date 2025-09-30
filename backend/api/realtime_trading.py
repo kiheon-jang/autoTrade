@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 
-from trading.realtime_engine import RealtimeTradingEngine, TradingMode, RealtimeTrade
+from trading.realtime_engine import RealtimeTradingEngine, TradingMode, RealtimeTrade, set_trading_engine
 from strategies.strategy_manager import strategy_manager, StrategyConfig, StrategyType
 from core.commission import ExchangeType
 
@@ -129,6 +129,9 @@ async def start_trading(request: TradingStartRequest, background_tasks: Backgrou
             mode=mode,
             initial_capital=request.initial_capital
         )
+        
+        # 전역 거래 엔진 인스턴스 설정
+        set_trading_engine(trading_engine)
         
         # 콜백 함수 설정
         trading_engine.on_trade_callback = on_trade_callback

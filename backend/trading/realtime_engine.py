@@ -109,9 +109,11 @@ class RealtimeTradingEngine:
             # 데이터 수집 시작
             await self.data_collector.start_collection(symbols, ['market'])
             
-            # 실시간 거래 루프 시작
+            # 실시간 거래 루프를 백그라운드에서 시작
             self.is_running = True
-            await self._trading_loop()
+            asyncio.create_task(self._trading_loop())
+            
+            self.logger.info("실시간 거래 엔진이 백그라운드에서 시작되었습니다.")
             
         except Exception as e:
             self.logger.error(f"거래 엔진 시작 오류: {e}")
