@@ -1,9 +1,13 @@
 """
 전략 관련 API 엔드포인트
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
+from datetime import datetime
+from sqlalchemy.orm import Session
+from core.database import get_db
+from models.strategy import Strategy, StrategyExecution
 
 router = APIRouter()
 
@@ -26,58 +30,67 @@ class StrategyUpdate(BaseModel):
 
 
 @router.post("/create")
-async def create_strategy(strategy: StrategyCreate):
+async def create_strategy(strategy: StrategyCreate, db: Session = Depends(get_db)):
     """전략 생성"""
     try:
-        from strategies.strategy_manager import strategy_manager, StrategyConfig, StrategyType
-        
-        # 전략 타입 변환
-        strategy_type_map = {
-            "scalping": StrategyType.SCALPING,
-            "day_trading": StrategyType.DAY_TRADING,
-            "swing_trading": StrategyType.SWING_TRADING,
-            "long_term": StrategyType.LONG_TERM
-        }
-        
-        strategy_type = strategy_type_map.get(strategy.strategy_type, StrategyType.SCALPING)
-        
-        # 전략 설정 생성
-        config = StrategyConfig(
+        # 데이터베이스에 전략 저장
+        db_strategy = Strategy(
             name=strategy.name,
-            strategy_type=strategy_type,
+            strategy_type=strategy.strategy_type,
             parameters=strategy.parameters,
             risk_per_trade=strategy.risk_per_trade,
-            max_positions=strategy.max_positions
+            max_positions=strategy.max_positions,
+            is_active=False,
+            created_at=datetime.now()
         )
         
-        # 전략 생성
-        strategy_id = strategy_manager.create_strategy(
-            name=strategy.name,
-            strategy_type=strategy_type,
-            config=config
-        )
+        db.add(db_strategy)
+        db.commit()
+        db.refresh(db_strategy)
         
         return {
-            "strategy_id": strategy_id,
-            "message": "전략이 성공적으로 생성되었습니다",
-            "strategy": strategy.dict()
+            "strategy_id": str(db_strategy.id),
+            "message": f"전략 '{strategy.name}'이 성공적으로 생성되었습니다",
+            "strategy": {
+                "id": db_strategy.id,
+                "name": db_strategy.name,
+                "strategy_type": db_strategy.strategy_type,
+                "parameters": db_strategy.parameters,
+                "risk_per_trade": db_strategy.risk_per_trade,
+                "max_positions": db_strategy.max_positions,
+                "is_active": db_strategy.is_active,
+                "created_at": db_strategy.created_at
+            }
         }
         
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"전략 생성 실패: {str(e)}")
 
 
 @router.get("/list")
-async def get_strategies():
+async def get_strategies(db: Session = Depends(get_db)):
     """전략 목록 조회"""
     try:
-        from strategies.strategy_manager import strategy_manager
+        strategies = db.query(Strategy).all()
         
-        strategies = strategy_manager.get_all_strategies()
+        strategy_list = []
+        for strategy in strategies:
+            strategy_list.append({
+                "id": strategy.id,
+                "name": strategy.name,
+                "strategy_type": strategy.strategy_type,
+                "parameters": strategy.parameters,
+                "risk_per_trade": strategy.risk_per_trade,
+                "max_positions": strategy.max_positions,
+                "is_active": strategy.is_active,
+                "created_at": strategy.created_at,
+                "updated_at": strategy.updated_at
+            })
         
         return {
-            "strategies": strategies,
-            "total": len(strategies),
+            "strategies": strategy_list,
+            "total": len(strategy_list),
             "message": "전략 목록을 성공적으로 조회했습니다"
         }
         
@@ -86,18 +99,26 @@ async def get_strategies():
 
 
 @router.get("/{strategy_id}")
-async def get_strategy(strategy_id: str):
+async def get_strategy(strategy_id: int, db: Session = Depends(get_db)):
     """특정 전략 조회"""
     try:
-        from strategies.strategy_manager import strategy_manager
+        strategy = db.query(Strategy).filter(Strategy.id == strategy_id).first()
         
-        strategy_info = strategy_manager.get_strategy_info(strategy_id)
-        
-        if not strategy_info:
+        if not strategy:
             raise HTTPException(status_code=404, detail="전략을 찾을 수 없습니다")
         
         return {
-            "strategy": strategy_info,
+            "strategy": {
+                "id": strategy.id,
+                "name": strategy.name,
+                "strategy_type": strategy.strategy_type,
+                "parameters": strategy.parameters,
+                "risk_per_trade": strategy.risk_per_trade,
+                "max_positions": strategy.max_positions,
+                "is_active": strategy.is_active,
+                "created_at": strategy.created_at,
+                "updated_at": strategy.updated_at
+            },
             "message": f"전략 {strategy_id} 정보를 성공적으로 조회했습니다"
         }
         

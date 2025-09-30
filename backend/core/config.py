@@ -18,10 +18,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     
-    # 데이터베이스 설정
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/trading_db"
+    # 데이터베이스 설정 (SQLite 사용)
+    DATABASE_URL: str = "sqlite:///./trading.db"
     REDIS_URL: str = "redis://localhost:6379"
-    TIMESCALE_URL: str = "postgresql://user:password@localhost:5432/timescale_db"
+    TIMESCALE_URL: str = "sqlite:///./timescale.db"
     
     # 빗썸 API 설정
     BITHUMB_API_KEY: Optional[str] = None

@@ -17,6 +17,8 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from services.bithumb_client import BithumbClient
+from core.database import get_timescale_db
+from models.market_data import Ticker, Candle
 from dotenv import load_dotenv
 
 # 환경 변수 로드
@@ -246,6 +248,9 @@ class RealtimeDataCollector:
         if len(self.data_buffer[symbol]) > 100:
             self.data_buffer[symbol] = self.data_buffer[symbol][-100:]
         
+        # 데이터베이스에 저장
+        await self._save_to_database(data)
+        
         # 구독자에게 알림
         if symbol in self.subscribers:
             for callback in self.subscribers[symbol]:
@@ -253,6 +258,31 @@ class RealtimeDataCollector:
                     await callback(data)
                 except Exception as e:
                     self.logger.error(f"구독자 콜백 오류: {e}")
+    
+    async def _save_to_database(self, data: Dict) -> None:
+        """데이터베이스에 시장 데이터 저장"""
+        try:
+            # TimescaleDB 세션 가져오기
+            db = next(get_timescale_db())
+            
+            # 티커 데이터 저장
+            if 'exchange' in data and 'symbol' in data:
+                ticker = Ticker(
+                    exchange=data.get('exchange', 'unknown'),
+                    symbol=data.get('symbol', 'BTC'),
+                    price=data.get('price', 0.0),
+                    volume=data.get('volume', 0.0),
+                    timestamp=datetime.now()
+                )
+                db.add(ticker)
+            
+            db.commit()
+            
+        except Exception as e:
+            self.logger.error(f"데이터베이스 저장 오류: {e}")
+        finally:
+            if 'db' in locals():
+                db.close()
     
     async def _collect_news_data(self):
         """뉴스 데이터 수집"""
