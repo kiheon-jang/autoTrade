@@ -10,6 +10,13 @@ from core.database import Base
 
 class OrderType(str, enum.Enum):
     """주문 타입"""
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
+
+
+class OrderSide(str, enum.Enum):
+    """주문 방향"""
     BUY = "buy"
     SELL = "sell"
 
@@ -36,8 +43,8 @@ class Order(Base):
     
     # 주문 기본 정보
     symbol = Column(String(20), nullable=False, index=True)  # BTC_KRW
-    order_type = Column(Enum(OrderType), nullable=False)
-    order_side = Column(String(10), nullable=False)  # bid(매수), ask(매도)
+    type = Column(Enum(OrderType), nullable=False)
+    side = Column(Enum(OrderSide), nullable=False)
     
     # 주문 수량 및 가격
     quantity = Column(Float, nullable=False)

@@ -55,23 +55,38 @@ class BithumbClient:
         
         self.last_request_time = time.time()
     
-    def _generate_signature(self, endpoint: str, params: Dict[str, Any]) -> str:
-        """HMAC-SHA512 서명 생성"""
+    def _generate_signature(self, endpoint: str, nonce: str, params: Dict[str, Any] = None) -> str:
+        """빗썸 API 1.0 공식 서명 생성 방식"""
         if not self.secret_key:
             raise BithumbAPIError("Secret key is required for private API")
         
-        # 파라미터를 정렬하여 문자열 생성
-        sorted_params = sorted(params.items())
-        query_string = "&".join([f"{k}={v}" for k, v in sorted_params])
+        if params is None:
+            params = {}
         
-        # 서명 생성
-        signature = hmac.new(
-            self.secret_key.encode('utf-8'),
-            query_string.encode('utf-8'),
+        # 1. URL 인코딩된 파라미터 문자열 생성 (endpoint 추가하지 않음)
+        post_data = urlencode(params) if params else ""
+        
+        # 2. 서명 메시지 생성 (구분자: chr(0) = null character)
+        message = endpoint + chr(0) + post_data + chr(0) + nonce
+        
+        # 4. 빗썸 공식 서명 생성 (공식 샘플 방식)
+        import base64
+        
+        # 1단계: HMAC-SHA512 암호화 (Secret Key는 원본 문자열 사용)
+        h = hmac.new(
+            self.secret_key.encode('utf-8'),  # 원본 문자열 그대로 사용
+            message.encode('utf-8'),
             hashlib.sha512
-        ).hexdigest()
+        )
         
-        return signature
+        # 2단계: hexdigest()로 16진수 문자열 생성
+        hex_output = h.hexdigest()
+        
+        # 3단계: 16진수 문자열을 UTF-8로 인코딩 후 Base64 인코딩
+        utf8_hex_output = hex_output.encode('utf-8')
+        api_sign = base64.b64encode(utf8_hex_output).decode('utf-8')
+        
+        return api_sign
     
     async def _make_request(self, method: str, endpoint: str, params: Optional[Dict] = None, 
                           is_private: bool = False) -> Dict[str, Any]:
@@ -85,20 +100,22 @@ class BithumbClient:
             if not self.api_key or not self.secret_key:
                 raise BithumbAPIError("API key and secret key are required for private API")
             
-            # Private API를 위한 파라미터 설정
-            params = params or {}
-            params.update({
-                "endpoint": endpoint,
-                "nonce": str(int(time.time() * 1000))
-            })
+            # Private API를 위한 nonce 생성 (밀리초 단위)
+            nonce = str(int(time.time() * 1000))
             
-            # 서명 생성 및 헤더 설정
-            signature = self._generate_signature(endpoint, params)
+            # 서명 생성 (빗썸 공식 방식)
+            signature = self._generate_signature(endpoint, nonce, params)
+            
+            # 헤더 설정 (빗썸 공식 방식)
             headers.update({
                 "Api-Key": self.api_key,
                 "Api-Sign": signature,
-                "Api-Nonce": params["nonce"]
+                "Api-Nonce": nonce
             })
+            
+            # POST 데이터에 endpoint 포함하지 않음 (빗썸 공식 방식)
+            if params is None:
+                params = {}
         
         try:
             if method.upper() == "GET":

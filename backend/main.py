@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from core.config import settings
-from api import auth, trading, strategy, monitoring, analysis, backtesting
+from api import auth, trading, strategy, monitoring, analysis, backtesting, realtime_trading
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(strategy.router, prefix="/api/v1/strategy", tags=["전략"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["모니터링"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["분석"])
 app.include_router(backtesting.router, prefix="/api/v1/backtesting", tags=["백테스팅"])
+app.include_router(realtime_trading.router, prefix="/api/v1/realtime", tags=["실시간거래"])
 
 
 @app.get("/")
