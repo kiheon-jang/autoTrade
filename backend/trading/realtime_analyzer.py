@@ -325,7 +325,7 @@ class RealtimeMarketAnalyzer:
             
             if candles is not None and len(candles) > 50:
                 # 기술적 지표 계산
-                indicators = self.technical_analyzer.calculate_all(candles)
+                indicators = self.technical_analyzer.calculate_all_indicators(candles)
                 
                 # 캐시 업데이트
                 self.indicators_cache[symbol] = indicators
