@@ -47,31 +47,29 @@ const Dashboard = () => {
     strategies: [],
     recentTrades: [],
     performance: [],
+    alerts: [],
   });
   const [loading, setLoading] = useState(true);
-  const { isConnected, lastMessage } = useWebSocket();
+  const [tradingStatus, setTradingStatus] = useState(null);
+  const { isConnected } = useWebSocket();
 
   useEffect(() => {
     fetchDashboardData();
+    fetchTradingStatus();
   }, []);
-
-  useEffect(() => {
-    if (lastMessage) {
-      // WebSocket으로 받은 실시간 데이터 업데이트
-      updateRealtimeData(lastMessage);
-    }
-  }, [lastMessage]);
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardRes, portfolioRes] = await Promise.all([
+      const [dashboardRes, portfolioRes, alertsRes] = await Promise.all([
         monitoringAPI.getDashboard(),
         monitoringAPI.getPortfolio(),
+        monitoringAPI.getAlerts(),
       ]);
 
       setDashboardData({
-        ...dashboardRes.data,
-        portfolio: portfolioRes.data,
+        ...dashboardRes,
+        portfolio: portfolioRes,
+        alerts: alertsRes.alerts || [],
       });
     } catch (error) {
       console.error('대시보드 데이터 로딩 실패:', error);
@@ -80,14 +78,16 @@ const Dashboard = () => {
     }
   };
 
-  const updateRealtimeData = (data) => {
-    setDashboardData(prev => ({
-      ...prev,
-      portfolio: {
-        ...prev.portfolio,
-        ...data.portfolio,
-      },
-    }));
+  const fetchTradingStatus = async () => {
+    try {
+      const { aiRecommendationAPI } = require('../services/api');
+      const response = await aiRecommendationAPI.getTradingStatus();
+      if (response.is_trading) {
+        setTradingStatus(response);
+      }
+    } catch (error) {
+      // 거래 중이 아닐 수 있음
+    }
   };
 
   const recentTradesColumns = [
@@ -185,43 +185,65 @@ const Dashboard = () => {
 
   return (
     <DashboardContainer>
-      <Title level={2}>대시보드</Title>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+        <Col>
+          <Title level={2}>📊 대시보드</Title>
+          <Text type="secondary">전체 시스템 현황 및 성과 개요</Text>
+        </Col>
+        {tradingStatus && tradingStatus.is_trading && (
+          <Col>
+            <Card size="small" style={{ background: '#f6ffed', border: '1px solid #b7eb8f' }}>
+              <Space>
+                <Badge status="processing" />
+                <Text strong style={{ color: '#52c41a' }}>
+                  {tradingStatus.strategy.name} 실행 중
+                </Text>
+                <Button type="link" href="/monitoring" size="small">
+                  모니터링 →
+                </Button>
+              </Space>
+            </Card>
+          </Col>
+        )}
+      </Row>
       
       {/* 주요 지표 */}
-      <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card className="metric-card">
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} md={6}>
+          <div className="metric-card">
+            <TrendingUpOutlined style={{ fontSize: 32, marginBottom: 12 }} />
             <div className="metric-value">
-              ₩{(dashboardData.portfolio?.totalValue || 0).toLocaleString()}
+              {dashboardData.portfolio.totalValue?.toLocaleString() || '0'}
             </div>
-            <div className="metric-label">총 자산</div>
-          </Card>
+            <div className="metric-label">포트폴리오 가치</div>
+          </div>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card className="metric-card">
+        <Col xs={24} sm={12} md={6}>
+          <div className="metric-card">
+            <DollarOutlined style={{ fontSize: 32, marginBottom: 12 }} />
             <div className="metric-value">
-              {(dashboardData.portfolio?.totalReturnRate || 0) >= 0 ? '+' : ''}
-              {(dashboardData.portfolio?.totalReturnRate || 0).toFixed(2)}%
+              {dashboardData.portfolio.totalReturnRate?.toFixed(2) || '0'}%
             </div>
             <div className="metric-label">총 수익률</div>
-          </Card>
+          </div>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card className="metric-card">
+        <Col xs={24} sm={12} md={6}>
+          <div className="metric-card">
+            <ThunderboltOutlined style={{ fontSize: 32, marginBottom: 12 }} />
             <div className="metric-value">
-              {(dashboardData.portfolio?.todayReturnRate || 0) >= 0 ? '+' : ''}
-              {(dashboardData.portfolio?.todayReturnRate || 0).toFixed(2)}%
+              {dashboardData.strategies?.filter(s => s.is_active).length || 0}
+            </div>
+            <div className="metric-label">활성 전략</div>
+          </div>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <div className="metric-card">
+            <BarChartOutlined style={{ fontSize: 32, marginBottom: 12 }} />
+            <div className="metric-value">
+              {dashboardData.portfolio.todayReturnRate?.toFixed(2) || '0'}%
             </div>
             <div className="metric-label">오늘 수익률</div>
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card className="metric-card">
-            <div className="metric-value">
-              {(dashboardData.strategies || []).filter(s => s.is_active).length}
-            </div>
-            <div className="metric-label">실행중인 전략</div>
-          </Card>
+          </div>
         </Col>
       </Row>
 
