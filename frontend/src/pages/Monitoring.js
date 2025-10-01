@@ -584,7 +584,7 @@ const Monitoring = () => {
           }
         >
           <Table
-            dataSource={[]} // 실제로는 거래 내역 데이터를 넣어야 함
+            dataSource={trading.trades || []}
             columns={tradesColumns}
             rowKey="id"
             pagination={{ pageSize: 10 }}

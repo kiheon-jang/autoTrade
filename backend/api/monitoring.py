@@ -273,22 +273,36 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # 클라이언트로부터 메시지 수신 (선택사항)
+            # 비동기로 메시지 수신 대기 (타임아웃 포함)
             try:
-                data = await websocket.receive_text()
-                # 클라이언트 요청 처리 (필요시)
-                logger.info(f"클라이언트 메시지 수신: {data}")
+                # 0.1초마다 체크하여 블로킹 방지
+                message = await asyncio.wait_for(
+                    websocket.receive_text(), 
+                    timeout=0.1
+                )
+                # 클라이언트 요청 처리
+                logger.info(f"클라이언트 메시지 수신: {message}")
+                
+                # ping 메시지에 pong 응답
+                if message == "ping":
+                    await websocket.send_text("pong")
+                    
+            except asyncio.TimeoutError:
+                # 타임아웃은 정상 - 계속 진행
+                pass
             except WebSocketDisconnect:
+                logger.info("클라이언트가 WebSocket 연결을 종료했습니다")
                 break
             except Exception as e:
                 logger.error(f"WebSocket 메시지 수신 오류: {e}")
                 break
             
-            # 1초마다 실시간 데이터 전송
-            await asyncio.sleep(1)
+            # 짧은 대기로 CPU 사용률 최적화
+            await asyncio.sleep(0.1)
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+        logger.info("WebSocket 연결 정상 종료")
     except Exception as e:
         logger.error(f"WebSocket 연결 오류: {e}")
         manager.disconnect(websocket)

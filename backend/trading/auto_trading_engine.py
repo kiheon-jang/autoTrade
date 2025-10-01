@@ -378,10 +378,11 @@ class AutoTradingEngine:
             
             # 페이퍼 트레이딩 모드
             if self.trading_mode == TradingMode.PAPER:
-                # 커미션 계산
+                # 커미션 계산 (수량, 가격, 거래소, is_maker 순서)
                 commission = self.commission_calc.calculate_commission(
-                    order_amount, 
-                    ExchangeType.BITHUMB, 
+                    quantity,
+                    current_price,
+                    ExchangeType.BITHUMB,
                     is_maker=False
                 )
                 
@@ -459,9 +460,10 @@ class AutoTradingEngine:
                 quantity = position.amount
                 order_amount = quantity * current_price
                 
-                # 커미션 계산
+                # 커미션 계산 (수량, 가격, 거래소, is_maker 순서)
                 commission = self.commission_calc.calculate_commission(
-                    order_amount,
+                    quantity,
+                    current_price,
                     ExchangeType.BITHUMB,
                     is_maker=False
                 )
@@ -568,6 +570,20 @@ class AutoTradingEngine:
                 for symbol, pos in self.positions.items()
             },
             "total_trades": len(self.trades),
+            "trades": [
+                {
+                    "id": trade.id,
+                    "symbol": trade.symbol,
+                    "side": trade.side,
+                    "amount": trade.amount,
+                    "price": trade.price,
+                    "timestamp": trade.timestamp.isoformat(),
+                    "status": trade.status,
+                    "commission": trade.commission,
+                    "order_id": trade.order_id
+                }
+                for trade in self.trades[-50:]  # 최근 50개 거래만
+            ],
             "active_strategy": self.active_strategy.get('strategy_name') if self.active_strategy else None
         }
 
