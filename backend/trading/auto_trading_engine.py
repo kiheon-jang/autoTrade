@@ -146,13 +146,13 @@ class AutoTradingEngine:
         
         while self.is_running:
             try:
-                # 전략 타입별 실행 주기
+                # 전략 타입별 실행 주기 (캐시 데이터 사용 - API 호출 없음!)
                 if strategy_type == 'scalping':
-                    interval = 30  # 30초마다 (고빈도)
+                    interval = 10  # 10초마다 (초고빈도)
                 elif strategy_type == 'dca':
-                    interval = 3600  # 1시간마다
+                    interval = 3600  # 1시간마다 (정기 매수)
                 else:
-                    interval = 300  # 5분마다 (기본)
+                    interval = 60  # 1분마다 (기본) - 5분에서 단축!
                 
                 # 전략 실행
                 if strategy_type == 'momentum':
