@@ -29,8 +29,8 @@ class AutoTradingEngine:
         # 빗썸 클라이언트
         self.bithumb_client = BithumbClient()
         
-        # 실시간 시장 분석기 (NEW!)
-        self.market_analyzer = get_realtime_analyzer(['BTC', 'ETH', 'XRP'])
+        # 실시간 시장 분석기 (100개 코인 계층적 분석)
+        self.market_analyzer = get_realtime_analyzer()
         
         # 실시간 거래 엔진
         self.trading_engine = RealtimeTradingEngine(
@@ -179,50 +179,55 @@ class AutoTradingEngine:
                 await asyncio.sleep(60)  # 오류 시 1분 대기
     
     async def _execute_momentum_strategy(self):
-        """모멘텀 전략 실행 (완전 실시간 분석)"""
+        """모멘텀 전략 실행 (상위 100개 코인 스캔)"""
         try:
-            # 실시간 분석기에서 최신 데이터 가져오기
-            for symbol in ['BTC', 'ETH', 'XRP']:
+            # 거래 기회 상위 10개 가져오기
+            top_opportunities = self.market_analyzer.get_top_opportunities(limit=10)
+            
+            logger.info(f"🔍 상위 기회 스캔: {len(top_opportunities)}개 발견")
+            
+            for opp in top_opportunities:
+                symbol = opp['symbol']
+                ml_signal = opp
+                
                 try:
-                    # 실시간 가격
-                    current_price = self.market_analyzer.get_current_price(symbol)
-                    if not current_price:
-                        logger.warning(f"{symbol} 현재 가격 없음")
-                        continue
-                    
-                    # 최신 ML 신호 (5분마다 갱신)
-                    ml_signal = self.market_analyzer.get_ml_signal(symbol)
-                    
-                    # 최신 기술적 지표 (1분마다 갱신)
-                    indicators = self.market_analyzer.get_indicators(symbol)
-                    
-                    logger.info(f"📊 {symbol} 가격: {current_price:,.0f}원, ML: {ml_signal.get('signal_type')} (신뢰도: {ml_signal.get('confidence', 0):.1%})")
-                    
-                    # 매수 조건: ML 신호 BUY + 신뢰도 70% 이상
-                    if ml_signal.get('signal_type') == 'BUY' and ml_signal.get('confidence', 0) > 0.7:
-                        # 이미 포지션이 있으면 스킵
+                    # 매수 조건: BUY 신호 + 신뢰도 70% 이상
+                    if opp['signal'] == 'BUY' and opp['confidence'] > 0.7:
+                        # 이미 포지션이 있거나 포지션 한도 초과
                         if symbol in self.positions:
-                            logger.info(f"⏭️ {symbol} 이미 포지션 보유 중")
                             continue
-                            
-                        # 매수 실행
-                        logger.info(f"🎯 {symbol} 모멘텀 매수 신호 발생!")
+                        
+                        if len(self.positions) >= 5:  # 최대 5개 포지션
+                            logger.info(f"⚠️ 최대 포지션 수 도달 (5개)")
+                            break
+                        
+                        # Tier 1 코인은 우선순위
+                        tier_bonus = 1.2 if opp['tier'] == 1 else 1.0
+                        
+                        logger.info(f"🎯 {symbol} [Tier {opp['tier']}] 모멘텀 매수 신호! (신뢰도: {opp['confidence']:.1%})")
+                        
                         await self._execute_buy_order(
                             symbol=symbol,
-                            confidence=ml_signal.get('confidence', 0.7),
-                            signal_strength=ml_signal.get('strength', 0.5)
+                            confidence=opp['confidence'] * tier_bonus,
+                            signal_strength=opp['strength']
                         )
                         
                 except Exception as e:
-                    logger.error(f"{symbol} 분석 오류: {e}")
+                    logger.error(f"{symbol} 거래 실행 오류: {e}")
                     
         except Exception as e:
             logger.error(f"모멘텀 전략 실행 오류: {e}")
     
     async def _execute_scalping_strategy(self):
-        """스캘핑 전략 실행 (완전 실시간 분석)"""
+        """스캘핑 전략 실행 (Tier 1 집중 스캔)"""
         try:
-            for symbol in ['BTC', 'ETH']:
+            # Tier 1 (거래량 급등) 코인만 스캔 - 가장 변동성 큼
+            tier_status = self.market_analyzer.get_tier_status()
+            tier1_coins = tier_status['tier1']['coins']
+            
+            logger.info(f"⚡ 스캘핑 스캔: Tier 1 코인 {len(tier1_coins)}개")
+            
+            for symbol in tier1_coins:
                 try:
                     # 실시간 분석 데이터
                     current_price = self.market_analyzer.get_current_price(symbol)
@@ -234,13 +239,11 @@ class AutoTradingEngine:
                     # 실시간 RSI (1분마다 재계산됨)
                     rsi = indicators.get('rsi_14', 50)
                     
-                    logger.info(f"📊 {symbol} RSI: {rsi:.2f}, 가격: {current_price:,.0f}원")
-                    
                     if rsi < 30 and symbol not in self.positions:  # 과매도
-                        logger.info(f"🎯 {symbol} 과매도 감지 (RSI: {rsi:.2f}) - 매수 시도")
+                        logger.info(f"🎯 {symbol} 과매도 감지 (RSI: {rsi:.2f}) - 스캘핑 매수")
                         await self._execute_buy_order(symbol, confidence=0.6, signal_strength=0.3, size_multiplier=0.5)
                     elif rsi > 70 and symbol in self.positions:  # 과매수
-                        logger.info(f"🎯 {symbol} 과매수 감지 (RSI: {rsi:.2f}) - 매도 시도")
+                        logger.info(f"🎯 {symbol} 과매수 감지 (RSI: {rsi:.2f}) - 스캘핑 매도")
                         await self._execute_sell_order(symbol, confidence=0.6, signal_strength=0.3)
                         
                 except Exception as e:
@@ -304,32 +307,39 @@ class AutoTradingEngine:
             logger.error(f"DCA 전략 실행 오류: {e}")
     
     async def _execute_adaptive_strategy(self):
-        """적응형 전략 실행 (완전 실시간 분석)"""
+        """적응형 전략 실행 (전체 100개 코인 스캔)"""
         try:
-            for symbol in ['BTC', 'ETH', 'XRP']:
+            # 거래 기회 상위 15개 가져오기
+            top_opportunities = self.market_analyzer.get_top_opportunities(limit=15)
+            
+            logger.info(f"🔍 적응형 전략: 상위 기회 {len(top_opportunities)}개 스캔")
+            
+            # 티어별로 로그
+            tier1_opps = [o for o in top_opportunities if o['tier'] == 1]
+            tier2_opps = [o for o in top_opportunities if o['tier'] == 2]
+            
+            if tier1_opps:
+                logger.info(f"🔥 Tier 1 기회: {[o['symbol'] for o in tier1_opps]}")
+            if tier2_opps:
+                logger.info(f"💎 Tier 2 기회: {[o['symbol'] for o in tier2_opps]}")
+            
+            for opp in top_opportunities:
+                symbol = opp['symbol']
+                
                 try:
-                    # 실시간 분석 데이터
-                    current_price = self.market_analyzer.get_current_price(symbol)
-                    ml_signal = self.market_analyzer.get_ml_signal(symbol)  # 5분마다 재예측
-                    indicators = self.market_analyzer.get_indicators(symbol)  # 1분마다 재계산
-                    
-                    if not current_price:
-                        continue
-                    
-                    signal_type = ml_signal.get('signal_type', 'HOLD')
-                    confidence = ml_signal.get('confidence', 0.5)
-                    
-                    logger.info(f"📊 {symbol} 가격: {current_price:,.0f}원, ML: {signal_type} (신뢰도: {confidence:.1%})")
-                    
-                    if signal_type == 'BUY' and confidence > 0.7 and symbol not in self.positions:
-                        logger.info(f"🎯 {symbol} 매수 신호 감지 - 매수 시도")
-                        await self._execute_buy_order(symbol, confidence, ml_signal.get('strength', 0.5))
-                    elif signal_type == 'SELL' and symbol in self.positions:
-                        logger.info(f"🎯 {symbol} 매도 신호 감지 - 매도 시도")
-                        await self._execute_sell_order(symbol, confidence, ml_signal.get('strength', 0.5))
+                    if opp['signal'] == 'BUY' and opp['confidence'] > 0.7:
+                        if symbol in self.positions or len(self.positions) >= 5:
+                            continue
+                        
+                        logger.info(f"🎯 {symbol} [Tier {opp['tier']}] 적응형 매수! (신뢰도: {opp['confidence']:.1%})")
+                        await self._execute_buy_order(symbol, opp['confidence'], opp['strength'])
+                        
+                    elif opp['signal'] == 'SELL' and symbol in self.positions:
+                        logger.info(f"🎯 {symbol} [Tier {opp['tier']}] 적응형 매도! (신뢰도: {opp['confidence']:.1%})")
+                        await self._execute_sell_order(symbol, opp['confidence'], opp['strength'])
                         
                 except Exception as e:
-                    logger.error(f"{symbol} 적응형 분석 오류: {e}")
+                    logger.error(f"{symbol} 거래 실행 오류: {e}")
                     
         except Exception as e:
             logger.error(f"적응형 전략 실행 오류: {e}")
