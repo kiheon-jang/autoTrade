@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Progress, Table, Tag, Space, Typography } from 'antd';
+import { Row, Col, Card, Statistic, Progress, Table, Tag, Space, Typography, Badge, Button } from 'antd';
 import { 
-  TrendingUpOutlined, 
+  RiseOutlined, 
   DollarOutlined, 
   ThunderboltOutlined,
   BarChartOutlined 
@@ -211,7 +211,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={6}>
           <div className="metric-card">
-            <TrendingUpOutlined style={{ fontSize: 32, marginBottom: 12 }} />
+            <RiseOutlined style={{ fontSize: 32, marginBottom: 12 }} />
             <div className="metric-value">
               {dashboardData.portfolio.totalValue?.toLocaleString() || '0'}
             </div>
