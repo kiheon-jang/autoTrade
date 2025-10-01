@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // 백엔드 API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8008';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -29,7 +29,8 @@ api.interceptors.request.use(
 // 응답 인터셉터
 api.interceptors.response.use(
   (response) => {
-    return response;
+    // 자동으로 response.data 반환
+    return response.data;
   },
   (error) => {
     if (error.response?.status === 401) {
@@ -100,7 +101,7 @@ export const aiRecommendationAPI = {
   // 시장 분석 및 전략 추천
   analyzeMarketAndRecommend: (data) => api.post('/api/v1/ai/analyze-market', data),
   
-  // 전략 선택
+  // 전략 선택 (실제 거래 시작)
   selectStrategy: (data) => api.post('/api/v1/ai/select-strategy', data),
   
   // 현재 추천 조회
@@ -111,6 +112,9 @@ export const aiRecommendationAPI = {
   
   // 활성 전략 조회
   getActiveStrategy: () => api.get('/api/v1/ai/active-strategy'),
+  
+  // 거래 상태 조회
+  getTradingStatus: () => api.get('/api/v1/ai/trading-status'),
   
   // 오토트레이딩 중지
   stopAutoTrading: () => api.post('/api/v1/ai/stop-autotrading'),

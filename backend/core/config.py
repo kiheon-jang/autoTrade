@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # 서버 설정
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8008
     
     # 데이터베이스 설정 (SQLite 사용)
     DATABASE_URL: str = "sqlite:///./trading.db"

@@ -142,9 +142,10 @@ const AIRecommendation = () => {
         max_risk: 0.05
       });
       
-      if (response.success) {
+      const data = response.data || response;
+      if (data.success) {
         setSelectedStrategy(strategy);
-        setActiveStrategy(response.strategy);
+        setActiveStrategy(data.strategy);
         setAutoTrading(true);
       }
     } catch (error) {
@@ -156,7 +157,8 @@ const AIRecommendation = () => {
   const stopAutoTrading = async () => {
     try {
       const response = await api.stopAutoTrading();
-      if (response.success) {
+      const data = response.data || response;
+      if (data.success) {
         setAutoTrading(false);
         setActiveStrategy(null);
         setSelectedStrategy(null);
@@ -170,8 +172,9 @@ const AIRecommendation = () => {
   const loadActiveStrategy = async () => {
     try {
       const response = await api.getActiveStrategy();
-      if (response.success && response.active_strategy) {
-        setActiveStrategy(response.active_strategy);
+      const data = response.data || response;
+      if (data.success && data.active_strategy) {
+        setActiveStrategy(data.active_strategy);
         setAutoTrading(true);
       }
     } catch (error) {
@@ -456,12 +459,11 @@ const AIRecommendation = () => {
         {/* 분석 히스토리 */}
         <Col span={24}>
           <AICard title="분석 히스토리">
-            <Timeline>
-              {analysisHistory.slice(0, 5).map((item, index) => (
-                <Timeline.Item
-                  key={index}
-                  dot={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-                >
+            <Timeline
+              items={analysisHistory.slice(0, 5).map((item, index) => ({
+                key: index,
+                dot: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+                children: (
                   <div>
                     <Text strong>{item.timestamp.toLocaleString()}</Text>
                     <div style={{ marginTop: '8px' }}>
@@ -472,9 +474,9 @@ const AIRecommendation = () => {
                       </Space>
                     </div>
                   </div>
-                </Timeline.Item>
-              ))}
-            </Timeline>
+                ),
+              }))}
+            />
           </AICard>
         </Col>
       </Row>

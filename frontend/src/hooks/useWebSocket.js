@@ -11,7 +11,8 @@ const useWebSocket = () => {
     const connectWebSocket = () => {
       try {
         // FastAPI WebSocket 엔드포인트에 직접 연결
-                socketRef.current = new WebSocket('ws://localhost:8010/api/v1/monitoring/ws');
+        const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8008';
+        socketRef.current = new WebSocket(`${wsUrl}/api/v1/monitoring/ws`);
 
         socketRef.current.onopen = () => {
           console.log('WebSocket 연결됨');

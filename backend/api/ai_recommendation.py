@@ -188,7 +188,7 @@ async def analyze_market_and_recommend(request: MarketAnalysisRequest):
 
 @router.post("/select-strategy")
 async def select_strategy(request: StrategySelectionRequest, background_tasks: BackgroundTasks):
-    """사용자가 추천된 전략 선택"""
+    """사용자가 추천된 전략 선택 및 실제 거래 시작"""
     try:
         global active_strategy
         
@@ -197,13 +197,36 @@ async def select_strategy(request: StrategySelectionRequest, background_tasks: B
         
         selected_recommendation = current_recommendations[request.strategy_id]
         
-        # 전략 활성화
+        # 전략 설정
         strategy_config = {
             "strategy_type": selected_recommendation.strategy_type,
             "auto_switch": request.auto_switch,
             "max_risk": request.max_risk,
-            "confidence_threshold": 0.7
+            "confidence_threshold": 0.7,
+            "trading_mode": getattr(request, 'trading_mode', 'paper')  # paper or live
         }
+        
+        # 자동거래 엔진 가져오기
+        from trading.auto_trading_engine import get_trading_engine
+        
+        trading_engine = get_trading_engine(
+            trading_mode=strategy_config['trading_mode'],
+            initial_capital=getattr(request, 'initial_capital', 1000000)
+        )
+        
+        # 전략 데이터 변환
+        strategy_data = {
+            "strategy_id": request.strategy_id,
+            "strategy_name": selected_recommendation.strategy_name,
+            "strategy_type": selected_recommendation.strategy_type,
+            "confidence_score": selected_recommendation.confidence_score,
+            "technical_signals": selected_recommendation.technical_signals,
+            "ml_signals": selected_recommendation.ml_signals,
+            "pattern_analysis": selected_recommendation.pattern_analysis
+        }
+        
+        # 실제 거래 시작
+        trading_result = await trading_engine.start_strategy(strategy_data, strategy_config)
         
         # 백그라운드에서 전략 모니터링 시작
         if request.auto_switch:
@@ -213,13 +236,14 @@ async def select_strategy(request: StrategySelectionRequest, background_tasks: B
                 strategy_config
             )
         
-        global active_strategy
+        # 활성 전략 저장
         active_strategy = {
             "strategy_id": request.strategy_id,
             "recommendation": selected_recommendation,
             "config": strategy_config,
             "started_at": datetime.now(),
-            "auto_switch": request.auto_switch
+            "auto_switch": request.auto_switch,
+            "trading_engine": trading_engine
         }
         
         return {
@@ -231,11 +255,12 @@ async def select_strategy(request: StrategySelectionRequest, background_tasks: B
                 "type": selected_recommendation.strategy_type,
                 "confidence": selected_recommendation.confidence_score,
                 "auto_switch": request.auto_switch
-            }
+            },
+            "trading": trading_result
         }
         
     except Exception as e:
-        logger.error(f"전략 선택 실패: {e}")
+        logger.error(f"전략 선택 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"전략 선택 실패: {str(e)}")
 
 
@@ -845,7 +870,78 @@ async def get_active_strategy():
 
 @router.post("/stop-autotrading")
 async def stop_autotrading():
-    """오토트레이딩 중지"""
+    """자동거래 중지"""
+    try:
+        global active_strategy
+        
+        if not active_strategy:
+            return {
+                "success": False,
+                "message": "실행 중인 전략이 없습니다"
+            }
+        
+        # 거래 엔진 중지
+        if 'trading_engine' in active_strategy:
+            trading_engine = active_strategy['trading_engine']
+            stop_result = await trading_engine.stop_strategy()
+        else:
+            stop_result = {"success": True, "message": "전략 모니터링만 중지"}
+        
+        # 활성 전략 초기화
+        strategy_name = active_strategy.get('recommendation', {}).strategy_name
+        active_strategy = None
+        
+        return {
+            "success": True,
+            "message": f"'{strategy_name}' 전략이 중지되었습니다",
+            "trading_result": stop_result
+        }
+        
+    except Exception as e:
+        logger.error(f"자동거래 중지 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"자동거래 중지 실패: {str(e)}")
+
+
+@router.get("/trading-status")
+async def get_trading_status():
+    """자동거래 상태 조회"""
+    try:
+        global active_strategy
+        
+        if not active_strategy or 'trading_engine' not in active_strategy:
+            return {
+                "success": True,
+                "is_trading": False,
+                "message": "실행 중인 거래가 없습니다"
+            }
+        
+        trading_engine = active_strategy['trading_engine']
+        status = trading_engine.get_status()
+        
+        return {
+            "success": True,
+            "is_trading": True,
+            "strategy": {
+                "id": active_strategy['strategy_id'],
+                "name": active_strategy['recommendation'].strategy_name,
+                "type": active_strategy['recommendation'].strategy_type,
+                "started_at": active_strategy['started_at'].isoformat()
+            },
+            "trading": status,
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        logger.error(f"거래 상태 조회 실패: {e}")
+        return {
+            "success": False,
+            "message": f"상태 조회 실패: {str(e)}"
+        }
+
+
+@router.get("/old-stop-endpoint")
+async def old_stop_autotrading_endpoint():
+    """이전 엔드포인트 (하위 호환성)"""
     global active_strategy
     
     if active_strategy:

@@ -29,7 +29,6 @@ import { monitoringAPI } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const { Title, Text } = Typography;
-const { TabPane } = Tabs;
 
 const MonitoringContainer = styled.div`
   .status-card {
@@ -253,156 +252,172 @@ const Monitoring = () => {
         </Col>
       </Row>
 
-      <Tabs defaultActiveKey="overview">
-        <TabPane tab="개요" key="overview">
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={16}>
-              <Card title="포트폴리오 성과" extra={<LineChartOutlined />}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dashboardData.performance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="value" 
-                      stroke="#1890ff" 
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Card>
-            </Col>
-            
-            <Col xs={24} lg={8}>
-              <Card title="전략 현황">
-                <List
-                  dataSource={dashboardData.strategies}
-                  renderItem={(strategy) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        avatar={
-                          <Avatar 
-                            style={{ 
-                              backgroundColor: strategy.is_active ? '#52c41a' : '#d9d9d9' 
-                            }}
-                            icon={<ThunderboltOutlined />}
+      <Tabs 
+        defaultActiveKey="overview"
+        items={[
+          {
+            key: 'overview',
+            label: '개요',
+            children: (
+              <Row gutter={[16, 16]}>
+                <Col xs={24} lg={16}>
+                  <Card title="포트폴리오 성과" extra={<LineChartOutlined />}>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={dashboardData.performance}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="#1890ff" 
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+                
+                <Col xs={24} lg={8}>
+                  <Card title="전략 현황">
+                    <List
+                      dataSource={dashboardData.strategies}
+                      renderItem={(strategy) => (
+                        <List.Item>
+                          <List.Item.Meta
+                            avatar={
+                              <Avatar 
+                                style={{ 
+                                  backgroundColor: strategy.is_active ? '#52c41a' : '#d9d9d9' 
+                                }}
+                                icon={<ThunderboltOutlined />}
+                              />
+                            }
+                            title={strategy.name}
+                            description={
+                              <Space>
+                                <Tag color={strategy.is_active ? 'green' : 'default'}>
+                                  {strategy.is_active ? '실행중' : '중지됨'}
+                                </Tag>
+                                <Text type="secondary">
+                                  {strategy.strategy_type}
+                                </Text>
+                              </Space>
+                            }
                           />
-                        }
-                        title={strategy.name}
-                        description={
-                          <Space>
-                            <Tag color={strategy.is_active ? 'green' : 'default'}>
-                              {strategy.is_active ? '실행중' : '중지됨'}
-                            </Tag>
-                            <Text type="secondary">
-                              {strategy.strategy_type}
-                            </Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+            ),
+          },
+          {
+            key: 'trades',
+            label: '거래 내역',
+            children: (
+              <Card title="최근 거래 내역">
+                <Table
+                  dataSource={dashboardData.trades}
+                  columns={tradesColumns}
+                  rowKey="id"
+                  pagination={{ pageSize: 10 }}
+                  size="small"
                 />
               </Card>
-            </Col>
-          </Row>
-        </TabPane>
-
-        <TabPane tab="거래 내역" key="trades">
-          <Card title="최근 거래 내역">
-            <Table
-              dataSource={dashboardData.trades}
-              columns={tradesColumns}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-              size="small"
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab="알림" key="alerts">
-          <Card title="시스템 알림">
-            <List
-              dataSource={dashboardData.alerts}
-              renderItem={(alert) => {
-                const alertConfig = getAlertType(alert.type);
-                return (
-                  <List.Item>
-                    <div className={`alert-item ${alertConfig.className}`}>
-                      <Space>
-                        <AlertOutlined style={{ color: alertConfig.color }} />
-                        <Text strong>{alert.title}</Text>
-                        <Text type="secondary">
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </Text>
-                      </Space>
-                      <div style={{ marginTop: 8 }}>
-                        <Text>{alert.message}</Text>
+            ),
+          },
+          {
+            key: 'alerts',
+            label: '알림',
+            children: (
+              <Card title="시스템 알림">
+                <List
+                  dataSource={dashboardData.alerts}
+                  renderItem={(alert) => {
+                    const alertConfig = getAlertType(alert.type);
+                    return (
+                      <List.Item>
+                        <div className={`alert-item ${alertConfig.className}`}>
+                          <Space>
+                            <AlertOutlined style={{ color: alertConfig.color }} />
+                            <Text strong>{alert.title}</Text>
+                            <Text type="secondary">
+                              {new Date(alert.timestamp).toLocaleString()}
+                            </Text>
+                          </Space>
+                          <div style={{ marginTop: 8 }}>
+                            <Text>{alert.message}</Text>
+                          </div>
+                        </div>
+                      </List.Item>
+                    );
+                  }}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: 'performance',
+            label: '성과 분석',
+            children: (
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={12}>
+                  <Card title="일별 수익률">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={dashboardData.performance}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip />
+                        <Line 
+                          type="monotone" 
+                          dataKey="return" 
+                          stroke="#52c41a" 
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </Col>
+                
+                <Col xs={24} sm={12}>
+                  <Card title="리스크 지표">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <div>
+                        <Text>샤프 비율</Text>
+                        <Progress 
+                          percent={75} 
+                          strokeColor="#52c41a"
+                          style={{ marginTop: 8 }}
+                        />
                       </div>
-                    </div>
-                  </List.Item>
-                );
-              }}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab="성과 분석" key="performance">
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12}>
-              <Card title="일별 수익률">
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={dashboardData.performance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="return" 
-                      stroke="#52c41a" 
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Card>
-            </Col>
-            
-            <Col xs={24} sm={12}>
-              <Card title="리스크 지표">
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <div>
-                    <Text>샤프 비율</Text>
-                    <Progress 
-                      percent={75} 
-                      strokeColor="#52c41a"
-                      style={{ marginTop: 8 }}
-                    />
-                  </div>
-                  <div>
-                    <Text>최대 낙폭</Text>
-                    <Progress 
-                      percent={25} 
-                      strokeColor="#ff4d4f"
-                      style={{ marginTop: 8 }}
-                    />
-                  </div>
-                  <div>
-                    <Text>승률</Text>
-                    <Progress 
-                      percent={68} 
-                      strokeColor="#1890ff"
-                      style={{ marginTop: 8 }}
-                    />
-                  </div>
-                </Space>
-              </Card>
-            </Col>
-          </Row>
-        </TabPane>
-      </Tabs>
+                      <div>
+                        <Text>최대 낙폭</Text>
+                        <Progress 
+                          percent={25} 
+                          strokeColor="#ff4d4f"
+                          style={{ marginTop: 8 }}
+                        />
+                      </div>
+                      <div>
+                        <Text>승률</Text>
+                        <Progress 
+                          percent={68} 
+                          strokeColor="#1890ff"
+                          style={{ marginTop: 8 }}
+                        />
+                      </div>
+                    </Space>
+                  </Card>
+                </Col>
+              </Row>
+            ),
+          },
+        ]}
+      />
     </MonitoringContainer>
   );
 };

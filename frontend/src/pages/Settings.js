@@ -25,7 +25,6 @@ import {
 } from '@ant-design/icons';
 import styled from 'styled-components';
 
-const { TabPane } = Tabs;
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
@@ -154,8 +153,14 @@ const Settings = () => {
         onFinish={handleSaveSettings}
         initialValues={settings}
       >
-        <Tabs defaultActiveKey="api">
-          <TabPane tab="API 키 설정" key="api" icon={<KeyOutlined />}>
+        <Tabs 
+          defaultActiveKey="api"
+          items={[
+            {
+              key: 'api',
+              label: 'API 키 설정',
+              icon: <KeyOutlined />,
+              children: (
             <Card title="거래소 API 키" className="settings-card">
               <Alert
                 message="보안 주의사항"
@@ -236,9 +241,13 @@ const Settings = () => {
                 </Col>
               </Row>
             </Card>
-          </TabPane>
-
-          <TabPane tab="거래 설정" key="trading" icon={<SettingOutlined />}>
+              ),
+            },
+            {
+              key: 'trading',
+              label: '거래 설정',
+              icon: <SettingOutlined />,
+              children: (
             <Card title="거래 파라미터" className="settings-card">
               <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12}>
@@ -303,9 +312,13 @@ const Settings = () => {
                 </Col>
               </Row>
             </Card>
-          </TabPane>
-
-          <TabPane tab="알림 설정" key="notifications" icon={<BellOutlined />}>
+              ),
+            },
+            {
+              key: 'notifications',
+              label: '알림 설정',
+              icon: <BellOutlined />,
+              children: (
             <Card title="알림 설정" className="settings-card">
               <div className="setting-item">
                 <div>
@@ -355,9 +368,13 @@ const Settings = () => {
                 </Form.Item>
               </div>
             </Card>
-          </TabPane>
-
-          <TabPane tab="시스템 설정" key="system" icon={<SecurityScanOutlined />}>
+              ),
+            },
+            {
+              key: 'system',
+              label: '시스템 설정',
+              icon: <SecurityScanOutlined />,
+              children: (
             <Card title="시스템 설정" className="settings-card">
               <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12}>
@@ -415,8 +432,10 @@ const Settings = () => {
                 </Form.Item>
               </div>
             </Card>
-          </TabPane>
-        </Tabs>
+              ),
+            },
+          ]}
+        />
 
         <Card style={{ marginTop: 24 }}>
           <Space>

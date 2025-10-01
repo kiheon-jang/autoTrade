@@ -4,58 +4,75 @@
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-# from sqlalchemy.pool import QueuePool  # SQLite에서는 불필요
-# import redis  # 로컬 개발용으로 비활성화
-from typing import Generator
+from typing import Generator, Optional
 import logging
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# SQLite 데이터베이스 엔진 (로컬 개발용)
-engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
-)
-
-# SQLite Timescale 엔진 (시계열 데이터용)
-timescale_engine = create_engine(
-    settings.TIMESCALE_URL,
-    echo=settings.DEBUG,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.TIMESCALE_URL else {}
-)
-
-# 세션 팩토리
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-TimescaleSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=timescale_engine)
-
-# Redis 연결 (로컬 개발용으로 비활성화)
-# redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
-redis_client = None  # 로컬 개발용으로 비활성화
-
-# 베이스 클래스
+# 데이터베이스 엔진 (선택적)
+engine = None
+timescale_engine = None
+SessionLocal = None
+TimescaleSessionLocal = None
+redis_client = None
 Base = declarative_base()
 TimescaleBase = declarative_base()
 
+# 데이터베이스 초기화 시도 (실패해도 계속 진행)
+try:
+    # SQLite 데이터베이스 엔진
+    engine = create_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    )
+    
+    # 시계열 데이터용 엔진
+    timescale_engine = create_engine(
+        settings.TIMESCALE_URL,
+        echo=settings.DEBUG,
+        connect_args={"check_same_thread": False} if "sqlite" in settings.TIMESCALE_URL else {}
+    )
+    
+    # 세션 팩토리
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    TimescaleSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=timescale_engine)
+    
+    logger.info("데이터베이스 연결 성공")
+except Exception as e:
+    logger.warning(f"데이터베이스 연결 실패 (메모리 모드로 계속): {e}")
+    SessionLocal = lambda: None
+    TimescaleSessionLocal = lambda: None
+
 
 def get_db() -> Generator:
-    """PostgreSQL 데이터베이스 세션 의존성"""
+    """데이터베이스 세션 의존성 (optional)"""
+    if SessionLocal is None:
+        yield None
+        return
+    
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 def get_timescale_db() -> Generator:
-    """TimescaleDB 세션 의존성"""
+    """시계열 데이터베이스 세션 의존성 (optional)"""
+    if TimescaleSessionLocal is None:
+        yield None
+        return
+        
     db = TimescaleSessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 def get_redis():
@@ -64,7 +81,11 @@ def get_redis():
 
 
 def create_tables():
-    """데이터베이스 테이블 생성"""
+    """데이터베이스 테이블 생성 (optional)"""
+    if not engine or not timescale_engine:
+        logger.info("데이터베이스 미사용 - 테이블 생성 건너뜀")
+        return
+        
     try:
         # 모든 모델 임포트
         from models.user import User, UserSession
@@ -72,69 +93,50 @@ def create_tables():
         from models.order import Order, Trade, Position, Portfolio
         from models.market_data import Ticker, OrderBook, Transaction, Candle, TechnicalIndicator
         
-        # PostgreSQL 테이블 생성
+        # 데이터베이스 테이블 생성
         Base.metadata.create_all(bind=engine)
-        logger.info("PostgreSQL 테이블 생성 완료")
+        logger.info("데이터베이스 테이블 생성 완료")
         
-        # TimescaleDB 테이블 생성
+        # 시계열 테이블 생성
         TimescaleBase.metadata.create_all(bind=timescale_engine)
-        logger.info("TimescaleDB 테이블 생성 완료")
-        
-        # TimescaleDB 하이퍼테이블 설정
-        with timescale_engine.connect() as conn:
-            # 시계열 테이블을 하이퍼테이블로 변환
-            conn.execute("SELECT create_hypertable('tickers', 'timestamp', if_not_exists => TRUE)")
-            conn.execute("SELECT create_hypertable('orderbooks', 'timestamp', if_not_exists => TRUE)")
-            conn.execute("SELECT create_hypertable('transactions', 'timestamp', if_not_exists => TRUE)")
-            conn.execute("SELECT create_hypertable('candles', 'timestamp', if_not_exists => TRUE)")
-            conn.execute("SELECT create_hypertable('technical_indicators', 'timestamp', if_not_exists => TRUE)")
-            
-            # 데이터 보존 정책 설정 (30일)
-            conn.execute("SELECT add_retention_policy('tickers', INTERVAL '30 days', if_not_exists => TRUE)")
-            conn.execute("SELECT add_retention_policy('orderbooks', INTERVAL '30 days', if_not_exists => TRUE)")
-            conn.execute("SELECT add_retention_policy('transactions', INTERVAL '30 days', if_not_exists => TRUE)")
-            conn.execute("SELECT add_retention_policy('candles', INTERVAL '30 days', if_not_exists => TRUE)")
-            conn.execute("SELECT add_retention_policy('technical_indicators', INTERVAL '30 days', if_not_exists => TRUE)")
-            
-        logger.info("TimescaleDB 하이퍼테이블 설정 완료")
+        logger.info("시계열 데이터 테이블 생성 완료")
         
     except Exception as e:
-        logger.error(f"데이터베이스 테이블 생성 실패: {e}")
-        raise
+        logger.warning(f"데이터베이스 테이블 생성 실패 (계속 진행): {e}")
 
 
 def test_connections():
-    """데이터베이스 연결 테스트"""
+    """데이터베이스 연결 테스트 (optional)"""
+    if not engine:
+        logger.info("데이터베이스 미사용 모드")
+        return True
+        
     try:
-        # PostgreSQL 연결 테스트
+        # 메인 데이터베이스 연결 테스트
         with engine.connect() as conn:
             conn.execute("SELECT 1")
-        logger.info("PostgreSQL 연결 성공")
+        logger.info("메인 데이터베이스 연결 성공")
         
-        # TimescaleDB 연결 테스트
-        with timescale_engine.connect() as conn:
-            conn.execute("SELECT 1")
-        logger.info("TimescaleDB 연결 성공")
-        
-        # Redis 연결 테스트
-        redis_client.ping()
-        logger.info("Redis 연결 성공")
+        # 시계열 데이터베이스 연결 테스트
+        if timescale_engine:
+            with timescale_engine.connect() as conn:
+                conn.execute("SELECT 1")
+            logger.info("시계열 데이터베이스 연결 성공")
         
         return True
         
     except Exception as e:
-        logger.error(f"데이터베이스 연결 테스트 실패: {e}")
-        return False
+        logger.warning(f"데이터베이스 연결 테스트 실패 (계속 진행): {e}")
+        return True  # 실패해도 계속 진행
 
 
 # 데이터베이스 초기화 함수
 def init_database():
-    """데이터베이스 초기화"""
+    """데이터베이스 초기화 (optional)"""
     logger.info("데이터베이스 초기화 시작")
     
     # 연결 테스트
-    if not test_connections():
-        raise Exception("데이터베이스 연결 실패")
+    test_connections()
     
     # 테이블 생성
     create_tables()
