@@ -918,6 +918,10 @@ async def get_trading_status():
         trading_engine = active_strategy['trading_engine']
         status = trading_engine.get_status()
         
+        # 실시간 분석 현황 추가
+        analyzer_status = trading_engine.market_analyzer.get_tier_status()
+        recent_opportunities = trading_engine.market_analyzer.get_top_opportunities(limit=20)
+        
         return {
             "success": True,
             "is_trading": True,
@@ -928,6 +932,11 @@ async def get_trading_status():
                 "started_at": active_strategy['started_at'].isoformat()
             },
             "trading": status,
+            "analysis": {
+                "tiers": analyzer_status,
+                "top_opportunities": recent_opportunities,
+                "scanning_coins": analyzer_status['total_coins']
+            },
             "timestamp": datetime.now()
         }
         

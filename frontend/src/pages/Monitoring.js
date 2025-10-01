@@ -24,7 +24,11 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   PlayCircleOutlined,
-  StopOutlined
+  StopOutlined,
+  SearchOutlined,
+  FireOutlined,
+  CrownOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -78,6 +82,7 @@ const Monitoring = () => {
   const [tradingStatus, setTradingStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pnlHistory, setPnlHistory] = useState([]);
+  const [analysisLog, setAnalysisLog] = useState([]);
   const { isConnected, lastMessage } = useWebSocket();
 
   useEffect(() => {
@@ -106,8 +111,19 @@ const Monitoring = () => {
             pnl: response.trading.total_pnl,
             capital: response.trading.current_capital
           };
-          return [...prev.slice(-20), newEntry]; // 최근 20개만 유지
+          return [...prev.slice(-20), newEntry];
         });
+        
+        // 분석 로그 업데이트 (상위 기회들)
+        if (response.analysis && response.analysis.top_opportunities) {
+          const topOpps = response.analysis.top_opportunities.slice(0, 10);
+          const logEntry = {
+            timestamp: new Date().toLocaleTimeString(),
+            scanning: response.analysis.scanning_coins,
+            opportunities: topOpps
+          };
+          setAnalysisLog(prev => [logEntry, ...prev.slice(0, 9)]);
+        }
       } else {
         setTradingStatus(null);
       }
@@ -372,6 +388,148 @@ const Monitoring = () => {
             </Row>
           )}
         </Card>
+
+        {/* 실시간 분석 현황 */}
+        {tradingStatus.analysis && (
+          <Card 
+            title={
+              <Space>
+                <SearchOutlined spin />
+                <span>실시간 시장 분석</span>
+                <Badge count={tradingStatus.analysis.scanning_coins} style={{ backgroundColor: '#52c41a' }} />
+              </Space>
+            }
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#fff7e6', borderLeft: '4px solid #fa8c16' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <FireOutlined style={{ color: '#fa8c16', fontSize: 20 }} />
+                      <Text strong>Tier 1: 거래량 급등</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus.analysis.tiers.tier1.count}개
+                    </Title>
+                    <Text type="secondary">1초마다 스캔</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus.analysis.tiers.tier1.coins.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="orange">{coin}</Tag>
+                      ))}
+                      {tradingStatus.analysis.tiers.tier1.coins.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+              
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#f6ffed', borderLeft: '4px solid #52c41a' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <CrownOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                      <Text strong>Tier 2: 핵심 코인</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus.analysis.tiers.tier2.count}개
+                    </Title>
+                    <Text type="secondary">5초마다 스캔</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus.analysis.tiers.tier2.coins.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="green">{coin}</Tag>
+                      ))}
+                      {tradingStatus.analysis.tiers.tier2.coins.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+              
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#e6f7ff', borderLeft: '4px solid #1890ff' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <TrophyOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+                      <Text strong>Tier 3: 시총 상위</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus.analysis.tiers.tier3.count}개
+                    </Title>
+                    <Text type="secondary">30초마다 스캔</Text>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
+
+            {/* 상위 거래 기회 */}
+            <Card 
+              title="발견된 거래 기회 (실시간)" 
+              style={{ marginTop: 16 }}
+              size="small"
+            >
+              <Table
+                dataSource={tradingStatus.analysis.top_opportunities}
+                size="small"
+                pagination={false}
+                scroll={{ y: 300 }}
+                columns={[
+                  {
+                    title: 'Tier',
+                    dataIndex: 'tier',
+                    key: 'tier',
+                    width: 60,
+                    render: (tier) => {
+                      const config = {
+                        1: { color: 'orange', icon: <FireOutlined /> },
+                        2: { color: 'green', icon: <CrownOutlined /> },
+                        3: { color: 'blue', icon: <TrophyOutlined /> }
+                      };
+                      return <Tag color={config[tier]?.color} icon={config[tier]?.icon}>T{tier}</Tag>;
+                    }
+                  },
+                  {
+                    title: '코인',
+                    dataIndex: 'symbol',
+                    key: 'symbol',
+                    render: (symbol) => <Text strong>{symbol}</Text>
+                  },
+                  {
+                    title: '신호',
+                    dataIndex: 'signal',
+                    key: 'signal',
+                    render: (signal) => (
+                      <Tag color={signal === 'BUY' ? 'green' : 'red'}>
+                        {signal === 'BUY' ? '매수' : '매도'}
+                      </Tag>
+                    )
+                  },
+                  {
+                    title: '신뢰도',
+                    dataIndex: 'confidence',
+                    key: 'confidence',
+                    render: (conf) => (
+                      <Progress 
+                        percent={Math.round(conf * 100)} 
+                        size="small"
+                        strokeColor={conf > 0.7 ? '#52c41a' : '#faad14'}
+                      />
+                    )
+                  },
+                  {
+                    title: '강도',
+                    dataIndex: 'strength',
+                    key: 'strength',
+                    render: (str) => <Text>{(str * 100).toFixed(0)}%</Text>
+                  },
+                  {
+                    title: '가격',
+                    dataIndex: 'price',
+                    key: 'price',
+                    render: (price) => price ? `${price.toLocaleString()}원` : '-'
+                  }
+                ]}
+              />
+            </Card>
+          </Card>
+        )}
 
         {/* 거래 통계 */}
         <Row gutter={[16, 16]}>
