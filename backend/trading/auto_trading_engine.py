@@ -9,6 +9,7 @@ from enum import Enum
 
 from services.bithumb_client import BithumbClient, BithumbAPIError
 from trading.realtime_engine import RealtimeTradingEngine, TradingMode, RealtimeTrade, Position
+from trading.realtime_analyzer import get_realtime_analyzer
 from core.commission import CommissionCalculator, ExchangeType
 
 
@@ -27,6 +28,9 @@ class AutoTradingEngine:
         
         # 빗썸 클라이언트
         self.bithumb_client = BithumbClient()
+        
+        # 실시간 시장 분석기 (NEW!)
+        self.market_analyzer = get_realtime_analyzer(['BTC', 'ETH', 'XRP'])
         
         # 실시간 거래 엔진
         self.trading_engine = RealtimeTradingEngine(
@@ -71,6 +75,10 @@ class AutoTradingEngine:
             logger.info(f"거래 모드: {self.trading_mode.value}")
             logger.info(f"초기 자본: {self.initial_capital:,.0f}원")
             
+            # 실시간 분석기 시작
+            await self.market_analyzer.start()
+            logger.info("📡 실시간 시장 분석기 시작됨")
+            
             # 백그라운드에서 전략 실행 루프 시작
             strategy_type = strategy_recommendation.get('strategy_type', 'adaptive')
             self.strategy_task = asyncio.create_task(self._strategy_loop(strategy_type))
@@ -78,7 +86,7 @@ class AutoTradingEngine:
             # 포지션 모니터링 시작 (손절/익절)
             self.monitoring_task = asyncio.create_task(self._monitor_positions())
             
-            logger.info(f"백그라운드 거래 엔진 시작됨 - {strategy_type} 전략")
+            logger.info(f"🚀 백그라운드 거래 엔진 시작됨 - {strategy_type} 전략")
             
             return {
                 "success": True,
@@ -95,6 +103,9 @@ class AutoTradingEngine:
         """전략 중지 및 모든 포지션 정리"""
         try:
             self.is_running = False
+            
+            # 실시간 분석기 중지
+            await self.market_analyzer.stop()
             
             # 전략 실행 루프 중지
             if hasattr(self, 'strategy_task') and self.strategy_task:
@@ -168,32 +179,38 @@ class AutoTradingEngine:
                 await asyncio.sleep(60)  # 오류 시 1분 대기
     
     async def _execute_momentum_strategy(self):
-        """모멘텀 전략 실행 (실시간 시장 데이터로 재분석)"""
+        """모멘텀 전략 실행 (완전 실시간 분석)"""
         try:
-            # 현재 시장 데이터 다시 가져오기
-            technical_signals = {}
-            ml_signals = {}
-            
-            # 실시간 시장 데이터 조회
+            # 실시간 분석기에서 최신 데이터 가져오기
             for symbol in ['BTC', 'ETH', 'XRP']:
                 try:
-                    ticker = await self.bithumb_client.get_ticker(symbol)
-                    current_price = float(ticker['closing_price'])
+                    # 실시간 가격
+                    current_price = self.market_analyzer.get_current_price(symbol)
+                    if not current_price:
+                        logger.warning(f"{symbol} 현재 가격 없음")
+                        continue
                     
-                    # 간단한 시그널 생성 (실제로는 더 복잡한 분석 필요)
-                    # 여기서는 원래 전략의 ML 신호 재사용
-                    orig_ml = self.active_strategy.get('ml_signals', {}).get(symbol, {})
+                    # 최신 ML 신호 (5분마다 갱신)
+                    ml_signal = self.market_analyzer.get_ml_signal(symbol)
                     
-                    if orig_ml.get('signal_type') == 'BUY' and orig_ml.get('confidence', 0) > 0.7:
+                    # 최신 기술적 지표 (1분마다 갱신)
+                    indicators = self.market_analyzer.get_indicators(symbol)
+                    
+                    logger.info(f"📊 {symbol} 가격: {current_price:,.0f}원, ML: {ml_signal.get('signal_type')} (신뢰도: {ml_signal.get('confidence', 0):.1%})")
+                    
+                    # 매수 조건: ML 신호 BUY + 신뢰도 70% 이상
+                    if ml_signal.get('signal_type') == 'BUY' and ml_signal.get('confidence', 0) > 0.7:
                         # 이미 포지션이 있으면 스킵
                         if symbol in self.positions:
+                            logger.info(f"⏭️ {symbol} 이미 포지션 보유 중")
                             continue
                             
                         # 매수 실행
+                        logger.info(f"🎯 {symbol} 모멘텀 매수 신호 발생!")
                         await self._execute_buy_order(
                             symbol=symbol,
-                            confidence=orig_ml.get('confidence', 0.7),
-                            signal_strength=orig_ml.get('strength', 0.5)
+                            confidence=ml_signal.get('confidence', 0.7),
+                            signal_strength=ml_signal.get('strength', 0.5)
                         )
                         
                 except Exception as e:
@@ -203,18 +220,18 @@ class AutoTradingEngine:
             logger.error(f"모멘텀 전략 실행 오류: {e}")
     
     async def _execute_scalping_strategy(self):
-        """스캘핑 전략 실행 (실시간 분석)"""
+        """스캘핑 전략 실행 (완전 실시간 분석)"""
         try:
-            # 실시간 시장 데이터로 RSI 재계산
             for symbol in ['BTC', 'ETH']:
                 try:
-                    # 현재 가격 조회
-                    ticker = await self.bithumb_client.get_ticker(symbol)
-                    current_price = float(ticker['closing_price'])
+                    # 실시간 분석 데이터
+                    current_price = self.market_analyzer.get_current_price(symbol)
+                    indicators = self.market_analyzer.get_indicators(symbol)
                     
-                    # 원래 신호 참조 (실제로는 실시간 RSI 계산 필요)
-                    orig_signals = self.active_strategy.get('technical_signals', {}).get(symbol, {})
-                    indicators = orig_signals.get('indicators', {})
+                    if not current_price or not indicators:
+                        continue
+                    
+                    # 실시간 RSI (1분마다 재계산됨)
                     rsi = indicators.get('rsi_14', 50)
                     
                     logger.info(f"📊 {symbol} RSI: {rsi:.2f}, 가격: {current_price:,.0f}원")
@@ -233,22 +250,22 @@ class AutoTradingEngine:
             logger.error(f"스캘핑 전략 실행 오류: {e}")
     
     async def _execute_swing_strategy(self):
-        """스윙 트레이딩 전략 실행 (실시간 분석)"""
+        """스윙 트레이딩 전략 실행 (완전 실시간 분석)"""
         try:
             for symbol in ['BTC', 'ETH', 'XRP']:
                 try:
-                    # 현재 가격 조회
-                    ticker = await self.bithumb_client.get_ticker(symbol)
-                    current_price = float(ticker['closing_price'])
+                    # 실시간 분석 데이터
+                    current_price = self.market_analyzer.get_current_price(symbol)
+                    indicators = self.market_analyzer.get_indicators(symbol)
                     
-                    # 원래 신호 참조
-                    orig_signals = self.active_strategy.get('technical_signals', {}).get(symbol, {})
-                    indicators = orig_signals.get('indicators', {})
+                    if not current_price or not indicators:
+                        continue
                     
+                    # 실시간 이동평균선 (1분마다 재계산됨)
                     sma_5 = indicators.get('sma_5', 0)
                     sma_20 = indicators.get('sma_20', 0)
                     
-                    logger.info(f"📊 {symbol} SMA(5): {sma_5:,.0f}, SMA(20): {sma_20:,.0f}")
+                    logger.info(f"📊 {symbol} 가격: {current_price:,.0f}원, SMA(5): {sma_5:,.0f}, SMA(20): {sma_20:,.0f}")
                     
                     if sma_5 > sma_20 and symbol not in self.positions:  # 골든크로스
                         logger.info(f"🎯 {symbol} 골든크로스 감지 - 매수 시도")
@@ -287,21 +304,22 @@ class AutoTradingEngine:
             logger.error(f"DCA 전략 실행 오류: {e}")
     
     async def _execute_adaptive_strategy(self):
-        """적응형 전략 실행 (실시간 분석)"""
+        """적응형 전략 실행 (완전 실시간 분석)"""
         try:
-            # 실시간 시장 데이터로 재분석
             for symbol in ['BTC', 'ETH', 'XRP']:
                 try:
-                    # 현재 가격 조회
-                    ticker = await self.bithumb_client.get_ticker(symbol)
-                    current_price = float(ticker['closing_price'])
+                    # 실시간 분석 데이터
+                    current_price = self.market_analyzer.get_current_price(symbol)
+                    ml_signal = self.market_analyzer.get_ml_signal(symbol)  # 5분마다 재예측
+                    indicators = self.market_analyzer.get_indicators(symbol)  # 1분마다 재계산
                     
-                    # ML 신호 참조
-                    ml_signal = self.active_strategy.get('ml_signals', {}).get(symbol, {})
+                    if not current_price:
+                        continue
+                    
                     signal_type = ml_signal.get('signal_type', 'HOLD')
                     confidence = ml_signal.get('confidence', 0.5)
                     
-                    logger.info(f"📊 {symbol} ML 신호: {signal_type} (신뢰도: {confidence:.1%})")
+                    logger.info(f"📊 {symbol} 가격: {current_price:,.0f}원, ML: {signal_type} (신뢰도: {confidence:.1%})")
                     
                     if signal_type == 'BUY' and confidence > 0.7 and symbol not in self.positions:
                         logger.info(f"🎯 {symbol} 매수 신호 감지 - 매수 시도")
@@ -320,9 +338,11 @@ class AutoTradingEngine:
                                   size_multiplier: float = 1.0, fixed_amount: float = None):
         """매수 주문 실행"""
         try:
-            # 현재 가격 조회
-            ticker = await self.bithumb_client.get_ticker(symbol)
-            current_price = float(ticker['closing_price'])
+            # 실시간 가격 사용
+            current_price = self.market_analyzer.get_current_price(symbol)
+            if not current_price:
+                logger.warning(f"{symbol} 현재 가격 없음 - 주문 스킵")
+                return
             
             # 포지션 크기 계산
             if fixed_amount:
@@ -410,9 +430,11 @@ class AutoTradingEngine:
             
             position = self.positions[symbol]
             
-            # 현재 가격 조회
-            ticker = await self.bithumb_client.get_ticker(symbol)
-            current_price = float(ticker['closing_price'])
+            # 실시간 가격 사용
+            current_price = self.market_analyzer.get_current_price(symbol)
+            if not current_price:
+                logger.warning(f"{symbol} 현재 가격 없음 - 주문 스킵")
+                return
             
             # 페이퍼 트레이딩 모드
             if self.trading_mode == TradingMode.PAPER:
@@ -477,9 +499,10 @@ class AutoTradingEngine:
                 await asyncio.sleep(10)  # 10초마다 체크
                 
                 for symbol, position in list(self.positions.items()):
-                    # 현재 가격 조회
-                    ticker = await self.bithumb_client.get_ticker(symbol)
-                    current_price = float(ticker['closing_price'])
+                    # 실시간 가격 사용
+                    current_price = self.market_analyzer.get_current_price(symbol)
+                    if not current_price:
+                        continue
                     
                     # 손익률 계산
                     pnl_pct = (current_price - position.avg_price) / position.avg_price
