@@ -392,10 +392,10 @@ class RealtimeMarketAnalyzer:
             # 빗썸 캔들 형식: [timestamp, open, close, high, low, volume]
             df = pd.DataFrame(candles_data, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
             
-            # 타입 변환
+            # 타입 변환 (TA-Lib은 float64 필요)
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)
             
             # 결측치 제거
             df = df.dropna()

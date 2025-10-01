@@ -79,6 +79,13 @@ class AutoTradingEngine:
             await self.market_analyzer.start()
             logger.info("📡 실시간 시장 분석기 시작됨")
             
+            # 초기 신호를 ML 캐시에 주입 (즉시 거래 기회 제공)
+            if 'ml_signals' in strategy_recommendation:
+                for symbol, signal in strategy_recommendation['ml_signals'].items():
+                    self.market_analyzer.ml_signals_cache[symbol] = signal
+                    self.market_analyzer.ml_updated_at[symbol] = datetime.now()
+                logger.info(f"✅ 초기 ML 신호 로드: {len(strategy_recommendation.get('ml_signals', {}))}개 코인")
+            
             # 백그라운드에서 전략 실행 루프 시작
             strategy_type = strategy_recommendation.get('strategy_type', 'adaptive')
             self.strategy_task = asyncio.create_task(self._strategy_loop(strategy_type))
