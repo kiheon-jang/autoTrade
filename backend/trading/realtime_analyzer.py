@@ -121,13 +121,21 @@ class RealtimeMarketAnalyzer:
             
             coin_data = []
             for symbol, data in all_tickers['data'].items():
-                if symbol == 'date':
+                if symbol == 'date' or not isinstance(data, dict):
                     continue
                 
                 try:
+                    # 필수 데이터 검증
+                    if 'closing_price' not in data or 'units_traded_24H' not in data:
+                        continue
+                    
                     volume_24h = float(data.get('units_traded_24H', 0))
                     price = float(data.get('closing_price', 0))
                     prev_price = float(data.get('opening_price', price))
+                    
+                    # 유효성 검사
+                    if price <= 0 or volume_24h <= 0:
+                        continue
                     
                     # 변동률 계산
                     change_pct = ((price - prev_price) / prev_price * 100) if prev_price > 0 else 0
@@ -139,7 +147,7 @@ class RealtimeMarketAnalyzer:
                         'change_pct': abs(change_pct),
                         'market_cap': volume_24h * price  # 간이 시가총액
                     })
-                except:
+                except Exception as e:
                     continue
             
             # 정렬
@@ -248,23 +256,37 @@ class RealtimeMarketAnalyzer:
     
     async def _update_price(self, symbol: str):
         """단일 코인 가격 업데이트"""
-        ticker = await self.bithumb_client.get_ticker(symbol)
-        price = float(ticker['closing_price'])
-        volume = float(ticker.get('units_traded_24H', 0))
-        
-        # 현재 가격 업데이트
-        self.current_prices[symbol] = price
-        self.volume_24h[symbol] = volume
-        
-        # 가격 히스토리 저장
-        if symbol not in self.price_history:
-            self.price_history[symbol] = deque(maxlen=200)
+        try:
+            # 빗썸 API는 심볼_KRW 형식 사용
+            ticker = await self.bithumb_client.get_ticker(f"{symbol}_KRW")
             
-        self.price_history[symbol].append({
-            'price': price,
-            'timestamp': datetime.now(),
-            'volume': volume
-        })
+            # 응답 검증 (단일 조회 시 data 안에 있음)
+            if not ticker or 'data' not in ticker:
+                return
+            
+            data = ticker['data']
+            if not isinstance(data, dict) or 'closing_price' not in data:
+                return
+            
+            price = float(data['closing_price'])
+            volume = float(data.get('units_traded_24H', 0))
+            
+            # 현재 가격 업데이트
+            self.current_prices[symbol] = price
+            self.volume_24h[symbol] = volume
+            
+            # 가격 히스토리 저장
+            if symbol not in self.price_history:
+                self.price_history[symbol] = deque(maxlen=200)
+                
+            self.price_history[symbol].append({
+                'price': price,
+                'timestamp': datetime.now(),
+                'volume': volume
+            })
+        except Exception as e:
+            # 조용히 무시 (유효하지 않은 코인)
+            pass
     
     async def _periodic_indicator_update(self):
         """1분마다 기술적 지표 재계산 (계층별)"""
@@ -354,9 +376,9 @@ class RealtimeMarketAnalyzer:
     async def _get_candles(self, symbol: str, count: int = 200) -> Optional[pd.DataFrame]:
         """캔들 데이터 조회 및 캐싱"""
         try:
-            # 캔들 데이터 조회 (1분봉)
+            # 캔들 데이터 조회 (1분봉) - _KRW 추가
             candles_data = await self.bithumb_client.get_candlestick(
-                symbol=symbol,
+                symbol=f"{symbol}_KRW",
                 interval='1m'
             )
             
