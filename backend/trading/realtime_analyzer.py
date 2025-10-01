@@ -377,24 +377,28 @@ class RealtimeMarketAnalyzer:
         """캔들 데이터 조회 및 캐싱"""
         try:
             # 캔들 데이터 조회 (1분봉) - _KRW 추가
-            candles_data = await self.bithumb_client.get_candlestick(
+            response = await self.bithumb_client.get_candlestick(
                 symbol=f"{symbol}_KRW",
                 interval='1m'
             )
             
-            if not candles_data:
+            if not response or 'data' not in response:
                 return None
             
-            # DataFrame 변환
-            df = pd.DataFrame(candles_data)
+            candles_data = response['data']
+            if not candles_data or len(candles_data) == 0:
+                return None
             
-            # 필요한 컬럼만 선택 및 타입 변환
-            if 'timestamp' in df.columns:
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            # 빗썸 캔들 형식: [timestamp, open, close, high, low, volume]
+            df = pd.DataFrame(candles_data, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
             
+            # 타입 변환
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # 결측치 제거
+            df = df.dropna()
             
             # 최근 count개만 유지
             df = df.tail(count)
