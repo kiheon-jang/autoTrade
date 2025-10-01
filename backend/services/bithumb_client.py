@@ -147,6 +147,16 @@ class BithumbClient:
         endpoint = f"/public/transaction_history/{currency}"
         return await self._make_request("GET", endpoint)
     
+    async def get_candlestick(self, symbol: str, interval: str = '1m') -> Dict[str, Any]:
+        """캔들스틱(차트) 데이터 조회
+        
+        Args:
+            symbol: 코인 심볼 (예: 'BTC_KRW')
+            interval: 간격 ('1m', '3m', '5m', '10m', '30m', '1h', '6h', '12h', '24h')
+        """
+        endpoint = f"/public/candlestick/{symbol}/{interval}"
+        return await self._make_request("GET", endpoint)
+    
     # Private API 메서드들
     async def get_balance(self) -> Dict[str, Any]:
         """잔고 조회"""
