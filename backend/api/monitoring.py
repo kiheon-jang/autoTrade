@@ -53,6 +53,18 @@ class ConnectionManager:
         # 연결이 끊어진 WebSocket 제거
         for connection in disconnected:
             self.disconnect(connection)
+    
+    def __getstate__(self):
+        """pickle 시 socket 객체 제외"""
+        state = self.__dict__.copy()
+        # WebSocket 연결은 직렬화하지 않음
+        state['active_connections'] = []
+        return state
+    
+    def __setstate__(self, state):
+        """unpickle 시 초기화"""
+        self.__dict__.update(state)
+        self.active_connections = []
 
 # 전역 연결 관리자
 manager = ConnectionManager()
@@ -130,6 +142,16 @@ async def get_ai_strategy_details():
             "max_drawdown": status.get('max_drawdown', 0)
         }
         
+        # 전략 정보 가져오기
+        strategy_name = "AI 추천 전략"
+        strategy_type = "ai_recommended"
+        
+        # 현재 실행 중인 전략 정보 확인
+        if hasattr(trading_engine, 'current_strategy') and trading_engine.current_strategy:
+            strategy_info = trading_engine.current_strategy
+            strategy_name = strategy_info.get('strategy_name', 'AI 추천 전략')
+            strategy_type = strategy_info.get('strategy_type', 'ai_recommended')
+        
         # 최근 거래 내역 포맷팅
         recent_trades = []
         for trade in trading_engine.trades[-10:]:  # 최근 10개 거래
@@ -172,9 +194,9 @@ async def get_ai_strategy_details():
             "success": True,
             "is_trading": True,
             "strategy": {
-                "id": getattr(trading_engine, 'current_strategy', {}).get("strategy_id", "unknown"),
-                "name": getattr(trading_engine, 'current_strategy', {}).get("strategy_name", "Unknown Strategy"),
-                "type": getattr(trading_engine, 'current_strategy', {}).get("strategy_type", "unknown")
+                "id": getattr(trading_engine, 'current_strategy', {}).get("strategy_id", "ai_strategy"),
+                "name": strategy_name,
+                "type": strategy_type
             },
             "trading": {
                 "mode": trading_engine.trading_mode.value,

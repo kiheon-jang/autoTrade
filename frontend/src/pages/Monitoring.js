@@ -37,7 +37,9 @@ import { useWebSocket } from '../hooks/useWebSocket';
 
 const { Title, Text } = Typography;
 
-const MonitoringContainer = styled.div`
+const MonitoringContainer = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'status',
+})`
   .status-badge {
     margin-right: 12px;
   }
@@ -480,7 +482,7 @@ const Monitoring = () => {
               <Empty description="보유 중인 포지션이 없습니다" />
             ) : (
               <Row gutter={[16, 16]}>
-                {aiStrategyDetails.current_positions.map((position) => {
+                {aiStrategyDetails.current_positions.map((position, index) => {
                   const unrealizedPnl = position.unrealized_pnl || 0;
                   const isProfitPosition = unrealizedPnl > 0;
                   return (
@@ -870,7 +872,7 @@ const Monitoring = () => {
               <Empty description="보유 중인 포지션이 없습니다" />
             ) : (
               <Row gutter={[16, 16]}>
-                {traditionalStrategyDetails.current_positions.map((position) => {
+                {traditionalStrategyDetails.current_positions.map((position, index) => {
                   const unrealizedPnl = position.unrealized_pnl || 0;
                   const isProfitPosition = unrealizedPnl > 0;
                   return (
@@ -1204,7 +1206,7 @@ const Monitoring = () => {
             <Empty description="보유 중인 포지션이 없습니다" />
           ) : (
             <Row gutter={[16, 16]}>
-              {Object.entries(trading.positions).map(([symbol, position]) => {
+              {Object.entries(trading.positions).map(([symbol, position], index) => {
                 const unrealizedPnl = position.unrealized_pnl || 0;
                 const isProfitPosition = unrealizedPnl > 0;
                 return (
