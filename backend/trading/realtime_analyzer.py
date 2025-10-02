@@ -354,7 +354,7 @@ class RealtimeMarketAnalyzer:
                         
                         if candles is not None and indicators:
                             # ML 신호 생성
-                            ml_signal = self.ml_generator.generate_signal(candles, indicators)
+                            ml_signal = self.ml_generator.generate_signal(candles)
                             
                             # 캐시 업데이트
                             self.ml_signals_cache[symbol] = ml_signal
