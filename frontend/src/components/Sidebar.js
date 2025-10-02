@@ -87,11 +87,11 @@ const Sidebar = () => {
       icon: <RobotOutlined />,
       label: 'AI 전략 추천',
     },
-    {
-      key: '/traditional-strategies',
-      icon: <LineChartOutlined />,
-      label: '전통적 전략',
-    },
+    // {
+    //   key: '/traditional-strategies',
+    //   icon: <LineChartOutlined />,
+    //   label: '전통적 전략',
+    // },
     // {
     //   key: '/strategies',
     //   icon: <FundOutlined />,

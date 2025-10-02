@@ -155,28 +155,42 @@ async def get_ai_strategy_details():
         # 최근 거래 내역 포맷팅
         recent_trades = []
         for trade in trading_engine.trades[-10:]:  # 최근 10개 거래
-            if hasattr(trade, 'id'):
+            try:
+                if hasattr(trade, 'id'):
+                    recent_trades.append({
+                        "id": getattr(trade, 'id', ''),
+                        "symbol": getattr(trade, 'symbol', ''),
+                        "type": getattr(trade, 'type', ''),
+                        "amount": getattr(trade, 'amount', 0),
+                        "price": getattr(trade, 'price', 0),
+                        "timestamp": getattr(trade, 'timestamp', ''),
+                        "status": getattr(trade, 'status', ''),
+                        "net_profit": getattr(trade, 'net_profit', 0)
+                    })
+                else:
+                    # 딕셔너리 형태의 거래 데이터 처리
+                    recent_trades.append({
+                        "id": trade.get('id', ''),
+                        "symbol": trade.get('symbol', ''),
+                        "type": trade.get('type', ''),
+                        "amount": trade.get('amount', 0),
+                        "price": trade.get('price', 0),
+                        "timestamp": trade.get('timestamp', ''),
+                        "status": trade.get('status', ''),
+                        "net_profit": trade.get('net_profit', 0)
+                    })
+            except Exception as e:
+                logger.warning(f"AI 전략 거래 데이터 처리 오류: {e}")
+                # 기본값으로 처리
                 recent_trades.append({
-                    "id": getattr(trade, 'id', ''),
-                    "symbol": getattr(trade, 'symbol', ''),
-                    "type": getattr(trade, 'type', ''),
-                    "amount": getattr(trade, 'amount', 0),
-                    "price": getattr(trade, 'price', 0),
-                    "timestamp": getattr(trade, 'timestamp', ''),
-                    "status": getattr(trade, 'status', ''),
-                    "net_profit": getattr(trade, 'net_profit', 0)
-                })
-            else:
-                # 딕셔너리 형태의 거래 데이터 처리
-                recent_trades.append({
-                    "id": trade.get('id', ''),
-                    "symbol": trade.get('symbol', ''),
-                    "type": trade.get('type', ''),
-                    "amount": trade.get('amount', 0),
-                    "price": trade.get('price', 0),
-                    "timestamp": trade.get('timestamp', ''),
-                    "status": trade.get('status', ''),
-                    "net_profit": trade.get('net_profit', 0)
+                    "id": '',
+                    "symbol": '',
+                    "type": '',
+                    "amount": 0,
+                    "price": 0,
+                    "timestamp": '',
+                    "status": '',
+                    "net_profit": 0
                 })
         
         # 현재 포지션 정보
@@ -255,28 +269,42 @@ async def get_traditional_strategy_details():
         # 최근 거래 내역 포맷팅
         recent_trades = []
         for trade in trades[-10:]:  # 최근 10개 거래
-            if hasattr(trade, 'id'):
+            try:
+                if hasattr(trade, 'id'):
+                    recent_trades.append({
+                        "id": getattr(trade, 'id', ''),
+                        "symbol": getattr(trade, 'symbol', ''),
+                        "type": getattr(trade, 'type', ''),
+                        "amount": getattr(trade, 'amount', 0),
+                        "price": getattr(trade, 'price', 0),
+                        "timestamp": getattr(trade, 'timestamp', ''),
+                        "status": getattr(trade, 'status', ''),
+                        "net_profit": getattr(trade, 'net_profit', 0)
+                    })
+                else:
+                    # 딕셔너리 형태의 거래 데이터 처리
+                    recent_trades.append({
+                        "id": trade.get('id', ''),
+                        "symbol": trade.get('symbol', ''),
+                        "type": trade.get('type', ''),
+                        "amount": trade.get('amount', 0),
+                        "price": trade.get('price', 0),
+                        "timestamp": trade.get('timestamp', ''),
+                        "status": trade.get('status', ''),
+                        "net_profit": trade.get('net_profit', 0)
+                    })
+            except Exception as e:
+                logger.warning(f"거래 데이터 처리 오류: {e}")
+                # 기본값으로 처리
                 recent_trades.append({
-                    "id": getattr(trade, 'id', ''),
-                    "symbol": getattr(trade, 'symbol', ''),
-                    "type": getattr(trade, 'type', ''),
-                    "amount": getattr(trade, 'amount', 0),
-                    "price": getattr(trade, 'price', 0),
-                    "timestamp": getattr(trade, 'timestamp', ''),
-                    "status": getattr(trade, 'status', ''),
-                    "net_profit": getattr(trade, 'net_profit', 0)
-                })
-            else:
-                # 딕셔너리 형태의 거래 데이터 처리
-                recent_trades.append({
-                    "id": trade.get('id', ''),
-                    "symbol": trade.get('symbol', ''),
-                    "type": trade.get('type', ''),
-                    "amount": trade.get('amount', 0),
-                    "price": trade.get('price', 0),
-                    "timestamp": trade.get('timestamp', ''),
-                    "status": trade.get('status', ''),
-                    "net_profit": trade.get('net_profit', 0)
+                    "id": '',
+                    "symbol": '',
+                    "type": '',
+                    "amount": 0,
+                    "price": 0,
+                    "timestamp": '',
+                    "status": '',
+                    "net_profit": 0
                 })
         
         # 현재 포지션 정보

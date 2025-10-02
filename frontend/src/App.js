@@ -8,7 +8,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import AIRecommendation from './pages/AIRecommendation';
-import TraditionalStrategies from './pages/TraditionalStrategies';
+// import TraditionalStrategies from './pages/TraditionalStrategies';
 // import Strategies from './pages/Strategies';
 // import Backtesting from './pages/Backtesting';
 import Monitoring from './pages/Monitoring';
@@ -49,7 +49,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/ai-recommendation" element={<AIRecommendation />} />
-              <Route path="/traditional-strategies" element={<TraditionalStrategies />} />
+              {/* <Route path="/traditional-strategies" element={<TraditionalStrategies />} /> */}
               {/* <Route path="/strategies" element={<Strategies />} /> */}
               {/* <Route path="/backtesting" element={<Backtesting />} /> */}
               <Route path="/monitoring" element={<Monitoring />} />
