@@ -31,6 +31,9 @@ import {
 import styled from 'styled-components';
 import { traditionalStrategyAPI } from '../services/api';
 
+// API 기본 URL 가져오기
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8008';
+
 const { Title, Text } = Typography;
 const { Option } = Select;
 
@@ -140,7 +143,7 @@ const TraditionalStrategies = () => {
   useEffect(() => {
     const checkBackendStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8008/api/v1/monitoring/strategy-status');
+        const response = await fetch(`${API_BASE_URL}/api/v1/monitoring/strategy-status`);
         const data = await response.json();
         
         // 백엔드에 활성 전략이 없으면 localStorage 정리

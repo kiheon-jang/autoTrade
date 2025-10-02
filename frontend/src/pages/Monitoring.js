@@ -10,7 +10,6 @@ import {
   Progress,
   Space,
   Button,
-  Alert,
   Badge,
   Descriptions,
   Empty
@@ -20,9 +19,7 @@ import {
   DollarOutlined,
   RiseOutlined,
   FallOutlined,
-  SyncOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
   PlayCircleOutlined,
   StopOutlined,
   SearchOutlined,
@@ -33,6 +30,9 @@ import {
 import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { aiRecommendationAPI } from '../services/api';
+
+// API 기본 URL 가져오기
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8008';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const { Title, Text } = Typography;
@@ -82,9 +82,7 @@ const MonitoringContainer = styled.div.withConfig({
 
 const Monitoring = () => {
   const [tradingStatus, setTradingStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [pnlHistory, setPnlHistory] = useState([]);
-  const [analysisLog, setAnalysisLog] = useState([]);
   const { isConnected, lastMessage } = useWebSocket();
 
   useEffect(() => {
@@ -223,13 +221,13 @@ const Monitoring = () => {
     const fetchStrategies = async () => {
       try {
         // 전통적 전략 상태 조회
-        const response = await fetch('http://localhost:8008/api/v1/monitoring/strategy-status');
+        const response = await fetch(`${API_BASE_URL}/api/v1/monitoring/strategy-status`);
         const data = await response.json();
         setTraditionalStrategies(data.active_list || []);
         
         // 전통적 전략이 있으면 상세 정보도 가져오기
         if (data.active_list && data.active_list.length > 0) {
-          const detailsResponse = await fetch('http://localhost:8008/api/v1/monitoring/traditional-strategy-details');
+          const detailsResponse = await fetch(`${API_BASE_URL}/api/v1/monitoring/traditional-strategy-details`);
           const detailsData = await detailsResponse.json();
           console.log('전통적 전략 상세 정보:', detailsData);
           if (detailsData.success) {
@@ -241,7 +239,7 @@ const Monitoring = () => {
         
         // AI 추천 전략 상세 정보 조회
         try {
-          const aiDetailsResponse = await fetch('http://localhost:8008/api/v1/monitoring/ai-strategy-details');
+          const aiDetailsResponse = await fetch(`${API_BASE_URL}/api/v1/monitoring/ai-strategy-details`);
           const aiDetailsData = await aiDetailsResponse.json();
           if (aiDetailsData.success) {
             setAiStrategyDetails(aiDetailsData);
