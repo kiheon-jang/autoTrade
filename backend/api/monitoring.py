@@ -159,7 +159,7 @@ async def get_ai_strategy_details():
                 recent_trades.append({
                     "id": getattr(trade, 'id', ''),
                     "symbol": getattr(trade, 'symbol', ''),
-                    "side": getattr(trade, 'side', ''),
+                    "type": getattr(trade, 'type', ''),
                     "amount": getattr(trade, 'amount', 0),
                     "price": getattr(trade, 'price', 0),
                     "timestamp": getattr(trade, 'timestamp', ''),
@@ -171,7 +171,7 @@ async def get_ai_strategy_details():
                 recent_trades.append({
                     "id": trade.get('id', ''),
                     "symbol": trade.get('symbol', ''),
-                    "side": trade.get('side', ''),
+                    "type": trade.get('type', ''),
                     "amount": trade.get('amount', 0),
                     "price": trade.get('price', 0),
                     "timestamp": trade.get('timestamp', ''),
@@ -259,7 +259,7 @@ async def get_traditional_strategy_details():
                 recent_trades.append({
                     "id": getattr(trade, 'id', ''),
                     "symbol": getattr(trade, 'symbol', ''),
-                    "side": getattr(trade, 'side', ''),
+                    "type": getattr(trade, 'type', ''),
                     "amount": getattr(trade, 'amount', 0),
                     "price": getattr(trade, 'price', 0),
                     "timestamp": getattr(trade, 'timestamp', ''),
@@ -271,7 +271,7 @@ async def get_traditional_strategy_details():
                 recent_trades.append({
                     "id": trade.get('id', ''),
                     "symbol": trade.get('symbol', ''),
-                    "side": trade.get('side', ''),
+                    "type": trade.get('type', ''),
                     "amount": trade.get('amount', 0),
                     "price": trade.get('price', 0),
                     "timestamp": trade.get('timestamp', ''),
@@ -290,12 +290,22 @@ async def get_traditional_strategy_details():
                 "unrealized_pnl": pos.amount * (trading_engine.market_analyzer.get_current_price(symbol) - pos.avg_price) if trading_engine else 0
             })
         
+        # 전략명 매핑
+        strategy_name_mapping = {
+            'traditional_day_trading': '데이트레이딩 전략',
+            'traditional_scalping': '스캘핑 전략', 
+            'traditional_swing': '스윙트레이딩 전략',
+            'traditional_long_term': '장기 투자 전략'
+        }
+        
+        strategy_name = strategy_name_mapping.get(strategy_id, strategy_info.name)
+        
         return {
             "success": True,
             "is_trading": True,
             "strategy": {
                 "id": strategy_id,
-                "name": strategy_info.name,
+                "name": strategy_name,
                 "type": strategy_info.config.strategy_type.value,
                 "status": strategy_info.status.value
             },

@@ -171,7 +171,7 @@ const Monitoring = () => {
     },
     {
       title: '타입',
-      dataIndex: 'side',
+      dataIndex: 'type',
       key: 'side',
       render: (side) => (
         <Tag color={side === 'buy' ? 'green' : 'red'}>
@@ -596,11 +596,11 @@ const Monitoring = () => {
                   },
                   {
                     title: '거래 유형',
-                    dataIndex: 'side',
+                    dataIndex: 'type',
                     key: 'side',
-                    render: (side) => (
-                      <Tag color={side === 'buy' ? 'green' : 'red'}>
-                        {side === 'buy' ? '매수' : '매도'}
+                    render: (type) => (
+                      <Tag color={type === 'buy' ? 'green' : 'red'}>
+                        {type === 'buy' ? '매수' : '매도'}
                       </Tag>
                     )
                   },
@@ -916,7 +916,7 @@ const Monitoring = () => {
               <Space>
                 <SearchOutlined spin />
                 <span>실시간 시장 분석</span>
-                <Badge count={traditionalStrategies.length} style={{ backgroundColor: '#52c41a' }} />
+                <Badge count="99" style={{ backgroundColor: '#52c41a' }} />
               </Space>
             }
           >
@@ -930,7 +930,7 @@ const Monitoring = () => {
                     </Space>
                     <Text type="secondary">고거래량 코인 모니터링</Text>
                     <Text style={{ fontSize: '18px', fontWeight: 'bold', color: '#fa8c16' }}>
-                      {traditionalStrategies.length}개 코인 분석 중
+                      99개 코인 분석 중
                     </Text>
                   </Space>
                 </Card>
@@ -986,11 +986,11 @@ const Monitoring = () => {
                   },
                   {
                     title: '거래 유형',
-                    dataIndex: 'side',
+                    dataIndex: 'type',
                     key: 'side',
-                    render: (side) => (
-                      <Tag color={side === 'buy' ? 'green' : 'red'}>
-                        {side === 'buy' ? '매수' : '매도'}
+                    render: (type) => (
+                      <Tag color={type === 'buy' ? 'green' : 'red'}>
+                        {type === 'buy' ? '매수' : '매도'}
                       </Tag>
                     )
                   },
