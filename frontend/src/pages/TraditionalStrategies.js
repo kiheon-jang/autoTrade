@@ -6,7 +6,6 @@ import {
   Tag, 
   Modal, 
   Form, 
-  Input, 
   Select, 
   InputNumber,
   message,
@@ -16,8 +15,7 @@ import {
   Statistic,
   Table,
   Progress,
-  Tooltip,
-  Divider
+  Tooltip
 } from 'antd';
 import { 
   PlayCircleOutlined, 

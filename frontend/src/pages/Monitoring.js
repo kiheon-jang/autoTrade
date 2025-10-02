@@ -30,10 +30,10 @@ import {
 import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { aiRecommendationAPI } from '../services/api';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 // API 기본 URL 가져오기
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8008';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 const { Title, Text } = Typography;
 
@@ -83,6 +83,8 @@ const MonitoringContainer = styled.div.withConfig({
 const Monitoring = () => {
   const [tradingStatus, setTradingStatus] = useState(null);
   const [pnlHistory, setPnlHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [analysisLog, setAnalysisLog] = useState([]);
   const { isConnected, lastMessage } = useWebSocket();
 
   useEffect(() => {
