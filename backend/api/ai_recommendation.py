@@ -260,6 +260,58 @@ async def select_strategy(request: StrategySelectionRequest, background_tasks: B
             initial_capital=getattr(request, 'initial_capital', 1000000)
         )
         
+        # 기존 거래가 실행 중이면 강력하게 중지
+        if trading_engine.is_running:
+            logger.info("🛑 AI 추천 전략: 기존 거래 강력 중지 시작")
+            
+            # 1단계: 정상 중지 시도
+            try:
+                await trading_engine.stop_strategy()
+                logger.info("✅ AI 추천: 정상 중지 시도 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ AI 추천: 정상 중지 실패: {e}")
+            
+            # 2단계: 강제 중지
+            logger.info("🛑 AI 추천: 강제 중지 시작")
+            trading_engine.is_running = False
+            
+            # 모든 태스크 강제 취소
+            if hasattr(trading_engine, 'strategy_task') and trading_engine.strategy_task:
+                trading_engine.strategy_task.cancel()
+                logger.info("✅ AI 추천: strategy_task 취소")
+            if hasattr(trading_engine, 'monitoring_task') and trading_engine.monitoring_task:
+                trading_engine.monitoring_task.cancel()
+                logger.info("✅ AI 추천: monitoring_task 취소")
+            
+            # 잠시 대기
+            import asyncio
+            await asyncio.sleep(2)
+            
+            # 3단계: 최종 확인 및 강제 정리
+            if trading_engine.is_running:
+                logger.warning("⚠️ AI 추천: 최종 강제 중지")
+                trading_engine.is_running = False
+                # 모든 포지션 강제 정리
+                if hasattr(trading_engine, 'positions'):
+                    trading_engine.positions.clear()
+                if hasattr(trading_engine, 'trades'):
+                    trading_engine.trades.clear()
+            
+            logger.info("✅ AI 추천: 기존 거래 강력 중지 완료")
+        
+        # StrategyManager에서도 기존 전략 중지
+        try:
+            from strategies.strategy_manager import strategy_manager
+            active_strategies = strategy_manager.get_active_strategies()
+            
+            if active_strategies:
+                logger.info(f"🛑 AI 추천: 기존 전략 중지: {active_strategies}")
+                for strategy_id in active_strategies:
+                    strategy_manager.stop_strategy(strategy_id)
+                logger.info("✅ AI 추천: 기존 전략 중지 완료")
+        except Exception as e:
+            logger.error(f"AI 추천: 기존 전략 중지 실패: {e}")
+        
         # 전략 데이터 변환
         strategy_data = {
             "strategy_id": request.strategy_id,
@@ -549,24 +601,44 @@ async def select_traditional_strategy(strategy_type: str, symbols: List[str] = N
             initial_capital=user_preferences.get("max_position_size", 0.3) * 1000000
         )
         
-        # 기존 거래가 실행 중이면 중지
+        # 기존 거래가 실행 중이면 강력하게 중지
         if trading_engine.is_running:
-            logger.info("🛑 기존 거래 중지 시작")
-            await trading_engine.stop_strategy()
-            logger.info("✅ 기존 거래 중지 완료")
+            logger.info("🛑 기존 거래 강력 중지 시작")
             
-            # 잠시 대기하여 완전히 중지되도록 함
+            # 1단계: 정상 중지 시도
+            try:
+                await trading_engine.stop_strategy()
+                logger.info("✅ 정상 중지 시도 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ 정상 중지 실패: {e}")
+            
+            # 2단계: 강제 중지
+            logger.info("🛑 강제 중지 시작")
+            trading_engine.is_running = False
+            
+            # 모든 태스크 강제 취소
+            if hasattr(trading_engine, 'strategy_task') and trading_engine.strategy_task:
+                trading_engine.strategy_task.cancel()
+                logger.info("✅ strategy_task 취소")
+            if hasattr(trading_engine, 'monitoring_task') and trading_engine.monitoring_task:
+                trading_engine.monitoring_task.cancel()
+                logger.info("✅ monitoring_task 취소")
+            
+            # 잠시 대기
             import asyncio
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
-            # 중지 확인
+            # 3단계: 최종 확인 및 강제 정리
             if trading_engine.is_running:
-                logger.warning("⚠️ 거래 중지 실패, 강제 중지 시도")
+                logger.warning("⚠️ 최종 강제 중지")
                 trading_engine.is_running = False
-                if hasattr(trading_engine, 'strategy_task') and trading_engine.strategy_task:
-                    trading_engine.strategy_task.cancel()
-                if hasattr(trading_engine, 'monitoring_task') and trading_engine.monitoring_task:
-                    trading_engine.monitoring_task.cancel()
+                # 모든 포지션 강제 정리
+                if hasattr(trading_engine, 'positions'):
+                    trading_engine.positions.clear()
+                if hasattr(trading_engine, 'trades'):
+                    trading_engine.trades.clear()
+            
+            logger.info("✅ 기존 거래 강력 중지 완료")
         
         # StrategyManager에서도 기존 전통적 전략 중지
         try:
