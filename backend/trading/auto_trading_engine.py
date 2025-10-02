@@ -62,6 +62,10 @@ class AutoTradingEngine:
     async def start_strategy(self, strategy_recommendation: Dict, config: Dict):
         """전략 시작"""
         try:
+            logger.info(f"🔄 전략 시작 요청: {strategy_recommendation.get('strategy_name', 'Unknown')}")
+            logger.info(f"전략 타입: {strategy_recommendation.get('strategy_type', 'Unknown')}")
+            logger.info(f"대상 코인: {strategy_recommendation.get('target_symbols', [])}")
+            
             self.active_strategy = strategy_recommendation
             self.strategy_config = config
             
@@ -70,12 +74,14 @@ class AutoTradingEngine:
                 self.max_risk_per_trade = config['max_risk']
             
             self.is_running = True
+            logger.info(f"✅ is_running = True 설정됨")
             
             logger.info(f"자동거래 시작: {strategy_recommendation['strategy_name']}")
             logger.info(f"거래 모드: {self.trading_mode.value}")
             logger.info(f"초기 자본: {self.initial_capital:,.0f}원")
             
             # 실시간 분석기 시작
+            logger.info("📡 실시간 시장 분석기 시작 중...")
             await self.market_analyzer.start()
             logger.info("📡 실시간 시장 분석기 시작됨")
             
@@ -88,12 +94,30 @@ class AutoTradingEngine:
             
             # 백그라운드에서 전략 실행 루프 시작
             strategy_type = strategy_recommendation.get('strategy_type', 'adaptive')
-            self.strategy_task = asyncio.create_task(self._strategy_loop(strategy_type))
+            logger.info(f"🔄 전략 루프 시작: {strategy_type}")
+            try:
+                self.strategy_task = asyncio.create_task(self._strategy_loop(strategy_type))
+                logger.info(f"✅ 전략 루프 태스크 생성됨")
+            except Exception as e:
+                logger.error(f"❌ 전략 루프 태스크 생성 실패: {e}", exc_info=True)
+                raise
                 
             # 포지션 모니터링 시작 (손절/익절)
-            self.monitoring_task = asyncio.create_task(self._monitor_positions())
+            logger.info("🔄 포지션 모니터링 시작...")
+            try:
+                self.monitoring_task = asyncio.create_task(self._monitor_positions())
+                logger.info(f"✅ 포지션 모니터링 태스크 생성됨")
+            except Exception as e:
+                logger.error(f"❌ 포지션 모니터링 태스크 생성 실패: {e}", exc_info=True)
+                raise
             
             logger.info(f"🚀 백그라운드 거래 엔진 시작됨 - {strategy_type} 전략")
+            logger.info(f"✅ is_running 상태: {self.is_running}")
+            
+            # 거래 시작 확인을 위한 추가 로깅
+            logger.info(f"📊 전략 루프 태스크 상태: {self.strategy_task is not None}")
+            logger.info(f"📊 모니터링 태스크 상태: {self.monitoring_task is not None}")
+            logger.info(f"📊 시장 분석기 상태: {self.market_analyzer is not None}")
             
             return {
                 "success": True,
@@ -104,6 +128,7 @@ class AutoTradingEngine:
             
         except Exception as e:
             logger.error(f"전략 시작 실패: {e}", exc_info=True)
+            self.is_running = False
             raise
     
     async def stop_strategy(self):
@@ -170,6 +195,10 @@ class AutoTradingEngine:
                     await self._execute_swing_strategy()
                 elif strategy_type == 'dca':
                     await self._execute_dca_strategy()
+                elif strategy_type == 'day_trading':
+                    await self._execute_day_trading_strategy()
+                elif strategy_type == 'long_term':
+                    await self._execute_long_term_strategy()
                 else:
                     await self._execute_adaptive_strategy()
                 
@@ -551,7 +580,21 @@ class AutoTradingEngine:
     
     def get_status(self) -> Dict:
         """현재 상태 조회"""
-        total_pnl = self.current_capital - self.initial_capital
+        # 보유 코인의 현재 가치 계산
+        portfolio_value = 0.0
+        for symbol, pos in self.positions.items():
+            current_price = self.market_analyzer.get_current_price(symbol)
+            if current_price:
+                portfolio_value += pos.amount * current_price
+        
+        # 총 자산 = 현금 + 보유 코인 가치
+        total_assets = self.current_capital + portfolio_value
+        
+        # 총 수수료 계산 (모든 거래에서 지불한 수수료 합계)
+        total_commission = sum(trade.commission for trade in self.trades)
+        
+        # 실제 손익 = 총 자산 - 초기 자본 (수수료는 이미 current_capital에서 차감됨)
+        total_pnl = total_assets - self.initial_capital
         pnl_pct = (total_pnl / self.initial_capital) * 100
         
         return {
@@ -559,13 +602,18 @@ class AutoTradingEngine:
             "mode": self.trading_mode.value,
             "initial_capital": self.initial_capital,
             "current_capital": self.current_capital,
+            "portfolio_value": portfolio_value,
+            "total_assets": total_assets,
             "total_pnl": total_pnl,
             "pnl_percentage": pnl_pct,
+            "total_commission": total_commission,
             "positions": {
                 symbol: {
                     "amount": pos.amount,
                     "avg_price": pos.avg_price,
-                    "side": pos.side
+                    "side": pos.side,
+                    "current_price": self.market_analyzer.get_current_price(symbol),
+                    "unrealized_pnl": (self.market_analyzer.get_current_price(symbol) - pos.avg_price) * pos.amount if self.market_analyzer.get_current_price(symbol) else 0
                 }
                 for symbol, pos in self.positions.items()
             },
@@ -587,6 +635,88 @@ class AutoTradingEngine:
             "active_strategy": self.active_strategy.get('strategy_name') if self.active_strategy else None
         }
 
+    async def _execute_day_trading_strategy(self):
+        """데이트레이딩 전략 실행 - AI 추천 전략과 동일한 분석 로직 사용"""
+        try:
+            # AI 추천 전략과 동일한 분석 로직 사용
+            # 거래 기회 상위 10개 가져오기
+            top_opportunities = self.market_analyzer.get_top_opportunities(limit=10)
+            
+            logger.info(f"📈 데이트레이딩 스캔: {len(top_opportunities)}개 기회 발견")
+            
+            for opp in top_opportunities:
+                symbol = opp['symbol']
+                ml_signal = opp
+                
+                try:
+                    # 매수 조건: BUY 신호 + 신뢰도 70% 이상
+                    if opp['signal'] == 'BUY' and opp['confidence'] > 0.7:
+                        # 이미 포지션이 있거나 포지션 한도 초과
+                        if symbol in self.positions:
+                            continue
+                        
+                        if len(self.positions) >= 2:  # 최대 2개 포지션
+                            logger.info(f"⚠️ 최대 포지션 수 도달 (2개)")
+                            break
+                        
+                        # Tier 1 코인은 우선순위
+                        tier_bonus = 1.2 if opp['tier'] == 1 else 1.0
+                        
+                        logger.info(f"🎯 {symbol} [Tier {opp['tier']}] 데이트레이딩 매수 신호! (신뢰도: {opp['confidence']:.1%})")
+                        
+                        await self._execute_buy_order(
+                            symbol=symbol,
+                            confidence=opp['confidence'] * tier_bonus,
+                            signal_strength=opp['strength']
+                        )
+                        
+                except Exception as e:
+                    logger.error(f"{symbol} 데이트레이딩 거래 실행 오류: {e}")
+                    
+        except Exception as e:
+            logger.error(f"데이트레이딩 전략 실행 오류: {e}")
+
+    async def _execute_long_term_strategy(self):
+        """장기 투자 전략 실행 - AI 추천 전략과 동일한 분석 로직 사용"""
+        try:
+            # AI 추천 전략과 동일한 분석 로직 사용
+            # 거래 기회 상위 5개 가져오기
+            top_opportunities = self.market_analyzer.get_top_opportunities(limit=5)
+            
+            logger.info(f"📊 장기 투자 스캔: {len(top_opportunities)}개 기회 발견")
+            
+            for opp in top_opportunities:
+                symbol = opp['symbol']
+                ml_signal = opp
+                
+                try:
+                    # 매수 조건: BUY 신호 + 신뢰도 80% 이상 (장기 투자는 더 높은 신뢰도)
+                    if opp['signal'] == 'BUY' and opp['confidence'] > 0.8:
+                        # 이미 포지션이 있거나 포지션 한도 초과
+                        if symbol in self.positions:
+                            continue
+                        
+                        if len(self.positions) >= 3:  # 최대 3개 포지션
+                            logger.info(f"⚠️ 최대 포지션 수 도달 (3개)")
+                            break
+                        
+                        # Tier 1 코인은 우선순위
+                        tier_bonus = 1.3 if opp['tier'] == 1 else 1.0
+                        
+                        logger.info(f"🎯 {symbol} [Tier {opp['tier']}] 장기 투자 매수 신호! (신뢰도: {opp['confidence']:.1%})")
+                        
+                        await self._execute_buy_order(
+                            symbol=symbol,
+                            confidence=opp['confidence'] * tier_bonus,
+                            signal_strength=opp['strength']
+                        )
+                        
+                except Exception as e:
+                    logger.error(f"{symbol} 장기 투자 거래 실행 오류: {e}")
+                    
+        except Exception as e:
+            logger.error(f"장기 투자 전략 실행 오류: {e}")
+
 
 # 전역 인스턴스
 _trading_engine_instance: Optional[AutoTradingEngine] = None
@@ -596,8 +726,14 @@ def get_trading_engine(trading_mode: str = "paper", initial_capital: float = 100
     """자동거래 엔진 인스턴스 반환"""
     global _trading_engine_instance
     
+    logger.info(f"🔍 get_trading_engine 호출: mode={trading_mode}, capital={initial_capital}")
+    logger.info(f"🔍 기존 인스턴스 존재: {_trading_engine_instance is not None}")
+    
     if _trading_engine_instance is None:
+        logger.info("🆕 새로운 AutoTradingEngine 인스턴스 생성")
         _trading_engine_instance = AutoTradingEngine(trading_mode, initial_capital)
+    else:
+        logger.info(f"♻️ 기존 인스턴스 재사용: is_running={_trading_engine_instance.is_running}")
     
     return _trading_engine_instance
 

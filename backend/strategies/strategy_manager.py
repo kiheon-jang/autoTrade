@@ -77,6 +77,79 @@ class StrategyManager:
         
         return strategy_id
     
+    def register_strategy(self, strategy_id: str, strategy_name: str, 
+                         strategy_type: str, is_active: bool = True,
+                         target_symbols: List[str] = None, config: Dict = None):
+        """전략 등록 (외부에서 전략을 등록할 때 사용)"""
+        # 전략 타입 매핑
+        type_mapping = {
+            'scalping': StrategyType.SCALPING,
+            'day_trading': StrategyType.DAY_TRADING,
+            'swing_trading': StrategyType.SWING_TRADING,
+            'long_term': StrategyType.LONG_TERM
+        }
+        
+        strategy_enum_type = type_mapping.get(strategy_type, StrategyType.DAY_TRADING)
+        
+        # 기본 설정 생성
+        if config is None:
+            config = StrategyConfig(
+                name=strategy_name,
+                strategy_type=strategy_enum_type,
+                risk_per_trade=0.02,
+                max_positions=3,
+                stop_loss_pct=0.05,
+                take_profit_pct=0.10,
+                enabled=True,
+                parameters={}
+            )
+        else:
+            # dict를 StrategyConfig로 변환
+            if isinstance(config, dict):
+                config = StrategyConfig(
+                    name=strategy_name,
+                    strategy_type=strategy_enum_type,
+                    risk_per_trade=config.get('risk_per_trade', 0.02),
+                    max_positions=config.get('max_positions', 3),
+                    stop_loss_pct=config.get('stop_loss', 0.05),
+                    take_profit_pct=config.get('take_profit', 0.10),
+                    enabled=True,
+                    parameters=config.get('parameters', {})
+                )
+        
+        # 전략 클래스 가져오기
+        strategy_class = self.strategy_types.get(strategy_enum_type)
+        if not strategy_class:
+            raise ValueError(f"Unknown strategy type: {strategy_type}")
+        
+        # 전략 인스턴스 생성
+        strategy_instance = strategy_class(config)
+        
+        # 전략 인스턴스 래핑
+        strategy_wrapper = StrategyInstance(
+            id=strategy_id,
+            name=strategy_name,
+            strategy=strategy_instance,
+            config=config,
+            status=StrategyStatus.ACTIVE if is_active else StrategyStatus.INACTIVE,
+            created_at=datetime.now(),
+            performance={}
+        )
+        
+        # 전략 등록
+        self.strategies[strategy_id] = strategy_wrapper
+        print(f"전략 등록됨: {strategy_id}, 상태: {strategy_wrapper.status}")
+        
+        # 활성 전략에 추가
+        if is_active and strategy_id not in self.active_strategies:
+            self.active_strategies.append(strategy_id)
+            print(f"활성 전략에 추가됨: {strategy_id}")
+        
+        print(f"현재 활성 전략 수: {len(self.active_strategies)}")
+        print(f"현재 전체 전략 수: {len(self.strategies)}")
+        
+        return strategy_id
+    
     def start_strategy(self, strategy_id: str) -> bool:
         """전략 시작"""
         if strategy_id not in self.strategies:
@@ -97,12 +170,20 @@ class StrategyManager:
             return False
         
         strategy = self.strategies[strategy_id]
-        strategy.strategy.stop()
+        
+        # 전략 중지 시도
+        try:
+            if hasattr(strategy.strategy, 'stop'):
+                strategy.strategy.stop()
+        except Exception as e:
+            print(f"전략 중지 오류: {e}")
+        
         strategy.status = StrategyStatus.INACTIVE
         
         if strategy_id in self.active_strategies:
             self.active_strategies.remove(strategy_id)
         
+        print(f"전략 중지됨: {strategy_id}, 활성 전략 수: {len(self.active_strategies)}")
         return True
     
     def pause_strategy(self, strategy_id: str) -> bool:

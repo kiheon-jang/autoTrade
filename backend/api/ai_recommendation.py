@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 current_recommendations = {}
 active_strategy = None
 recommendation_history = []
+user_preferences = {
+    "trading_style": "balanced",  # conservative, balanced, aggressive
+    "risk_tolerance": "medium",    # low, medium, high
+    "max_position_size": 0.3,
+    "stop_loss_pct": 0.05,
+    "take_profit_pct": 0.10,
+    "preferred_strategies": []
+}
 
 
 class MarketAnalysisRequest(BaseModel):
@@ -64,6 +72,44 @@ class StrategySelectionRequest(BaseModel):
     strategy_id: str
     auto_switch: bool = True
     max_risk: float = 0.05  # 5%
+    trading_style: str = "balanced"  # conservative, balanced, aggressive
+    risk_tolerance: str = "medium"  # low, medium, high
+
+
+class UserPreferencesRequest(BaseModel):
+    """사용자 투자 성향 설정 요청"""
+    trading_style: str = "balanced"  # conservative, balanced, aggressive
+    risk_tolerance: str = "medium"  # low, medium, high
+    max_position_size: float = 0.3  # 최대 포지션 크기 (자본 대비)
+    stop_loss_pct: float = 0.05  # 손절 비율
+    take_profit_pct: float = 0.10  # 익절 비율
+    preferred_strategies: List[str] = []  # 선호하는 전략 타입들
+
+
+class TraditionalStrategyRequest(BaseModel):
+    """전통적 전략 분석 요청"""
+    symbols: List[str] = ["BTC", "ETH", "XRP"]
+    timeframe: str = "1h"
+    period_days: int = 30  # 분석 기간 (일)
+    initial_capital: float = 1000000  # 초기 자본
+
+
+class TraditionalStrategyResult(BaseModel):
+    """전통적 전략 결과"""
+    strategy_name: str
+    strategy_type: str
+    total_return: float
+    annual_return: float
+    max_drawdown: float
+    sharpe_ratio: float
+    win_rate: float
+    total_trades: int
+    avg_trade_return: float
+    best_trade: float
+    worst_trade: float
+    volatility: float
+    risk_level: str
+    recommendation: str
 
 
 async def fetch_real_market_data(symbol: str, timeframe: str = "1h", limit: int = 100) -> pd.DataFrame:
@@ -286,6 +332,872 @@ async def get_recommendation_history(limit: int = 20):
     }
 
 
+@router.post("/user-preferences")
+async def set_user_preferences(request: UserPreferencesRequest):
+    """사용자 투자 성향 설정"""
+    global user_preferences
+    
+    try:
+        # 사용자 선호도 업데이트
+        user_preferences.update({
+            "trading_style": request.trading_style,
+            "risk_tolerance": request.risk_tolerance,
+            "max_position_size": request.max_position_size,
+            "stop_loss_pct": request.stop_loss_pct,
+            "take_profit_pct": request.take_profit_pct,
+            "preferred_strategies": request.preferred_strategies
+        })
+        
+        logger.info(f"사용자 선호도 업데이트: {user_preferences}")
+        
+        return {
+            "success": True,
+            "message": "사용자 투자 성향이 설정되었습니다",
+            "preferences": user_preferences
+        }
+        
+    except Exception as e:
+        logger.error(f"사용자 선호도 설정 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"사용자 선호도 설정 실패: {str(e)}")
+
+
+@router.get("/user-preferences")
+async def get_user_preferences():
+    """현재 사용자 투자 성향 조회"""
+    return {
+        "success": True,
+        "preferences": user_preferences
+    }
+
+
+@router.post("/traditional-strategies")
+async def analyze_traditional_strategies(request: TraditionalStrategyRequest):
+    """전통적인 거래 전략들의 수익률 분석"""
+    try:
+        logger.info(f"전통적 전략 분석 시작: {request.symbols}, {request.period_days}일")
+        
+        # 시장 데이터 수집
+        market_data = {}
+        for symbol in request.symbols:
+            data = await fetch_real_market_data(symbol, request.timeframe, request.period_days * 24)
+            if not data.empty:
+                market_data[symbol] = data
+        
+        if not market_data:
+            raise HTTPException(status_code=400, detail="시장 데이터를 가져올 수 없습니다")
+        
+        # 각 전략별 수익률 계산
+        results = []
+        
+        # 1. 스캘핑 전략
+        scalping_result = await _calculate_scalping_strategy(market_data, request.initial_capital)
+        results.append(scalping_result)
+        
+        # 2. 데이트레이딩 전략
+        daytrading_result = await _calculate_daytrading_strategy(market_data, request.initial_capital)
+        results.append(daytrading_result)
+        
+        # 3. 스윙트레이딩 전략
+        swing_result = await _calculate_swing_strategy(market_data, request.initial_capital)
+        results.append(swing_result)
+        
+        # 4. 롱텀 전략
+        longterm_result = await _calculate_longterm_strategy(market_data, request.initial_capital)
+        results.append(longterm_result)
+        
+        # 결과 정렬 (수익률 기준)
+        results.sort(key=lambda x: x.total_return, reverse=True)
+        
+        return {
+            "success": True,
+            "strategies": results,
+            "analysis_period": f"{request.period_days}일",
+            "initial_capital": request.initial_capital,
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        logger.error(f"전통적 전략 분석 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"전통적 전략 분석 실패: {str(e)}")
+
+
+@router.post("/stop-traditional-strategy")
+async def stop_traditional_strategy():
+    """전통적 전략 중지"""
+    try:
+        from trading.auto_trading_engine import get_trading_engine
+        from strategies.strategy_manager import strategy_manager
+        
+        # AutoTradingEngine 중지
+        trading_engine = get_trading_engine()
+        if trading_engine and trading_engine.is_running:
+            logger.info("🛑 전통적 전략 중지 시작")
+            await trading_engine.stop_strategy()
+            logger.info("✅ AutoTradingEngine 중지 완료")
+        
+        # StrategyManager에서 전통적 전략 중지
+        active_strategies = strategy_manager.get_active_strategies()
+        traditional_strategies = [s for s in active_strategies if s.startswith('traditional_')]
+        
+        if traditional_strategies:
+            logger.info(f"🛑 StrategyManager에서 전통적 전략 중지: {traditional_strategies}")
+            for strategy_id in traditional_strategies:
+                strategy_manager.stop_strategy(strategy_id)
+            logger.info("✅ StrategyManager 전통적 전략 중지 완료")
+        
+        return {
+            "success": True,
+            "message": "전통적 전략이 중지되었습니다"
+        }
+        
+    except Exception as e:
+        logger.error(f"전통적 전략 중지 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"전통적 전략 중지 실패: {str(e)}")
+
+@router.post("/select-traditional-strategy")
+async def select_traditional_strategy(strategy_type: str, symbols: List[str] = None, background_tasks: BackgroundTasks = None):
+    """전통적 전략 선택 및 실행"""
+    print(f"🚀 select_traditional_strategy API 호출됨: strategy_type={strategy_type}, symbols={symbols}")
+    logger.info(f"🚀 select_traditional_strategy API 호출됨: strategy_type={strategy_type}, symbols={symbols}")
+    try:
+        # 기본 코인 설정 (전체 코인 대상)
+        if symbols is None:
+            try:
+                # 빗썸에서 실제 거래 가능한 모든 코인 목록 가져오기
+                from services.bithumb_client import BithumbClient
+                bithumb_client = BithumbClient()
+                
+                # 빗썸 API에서 거래 가능한 코인 목록 조회
+                ticker_data = await bithumb_client.get_ticker("ALL")
+                if ticker_data and 'data' in ticker_data:
+                    # KRW 기준 거래 가능한 코인들만 필터링
+                    symbols = [coin for coin in ticker_data['data'].keys() 
+                              if coin != 'date' and coin != 'BTC' and 'KRW' in str(ticker_data['data'][coin])]
+                    # BTC는 별도로 추가
+                    if 'BTC' not in symbols:
+                        symbols.append('BTC')
+                else:
+                    # API 실패 시 기본 코인 목록 사용
+                    symbols = [
+                        'BTC', 'ETH', 'XRP', 'ADA', 'DOT', 'LINK', 'UNI', 'AAVE', 'SOL', 'MATIC',
+                        'AVAX', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'VET', 'ICP', 'FIL', 'TRX', 'LTC',
+                        'BCH', 'ETC', 'XLM', 'HBAR', 'MANA', 'SAND', 'AXS', 'CHZ', 'ENJ', 'BAT'
+                    ]
+                
+                logger.info(f"빗썸에서 거래 가능한 코인 {len(symbols)}개 확인: {symbols[:10]}...")
+                
+            except Exception as e:
+                logger.error(f"빗썸 코인 목록 조회 실패: {e}")
+                # 실패 시 기본 코인 목록 사용
+                symbols = [
+                    'BTC', 'ETH', 'XRP', 'ADA', 'DOT', 'LINK', 'UNI', 'AAVE', 'SOL', 'MATIC',
+                    'AVAX', 'ATOM', 'NEAR', 'FTM', 'ALGO', 'VET', 'ICP', 'FIL', 'TRX', 'LTC',
+                    'BCH', 'ETC', 'XLM', 'HBAR', 'MANA', 'SAND', 'AXS', 'CHZ', 'ENJ', 'BAT'
+                ]
+        
+        logger.info(f"전통적 전략 선택: {strategy_type}, 대상 코인: {symbols}")
+        # 전략별 설정
+        strategy_configs = {
+            "scalping": {
+                "strategy_name": "스캘핑 전략",
+                "strategy_type": "scalping",
+                "execution_interval": 10,  # 10초
+                "max_positions": 3,
+                "stop_loss": 0.01,  # 1%
+                "take_profit": 0.02,  # 2%
+                "position_size": 0.1  # 10%
+            },
+            "daytrading": {
+                "strategy_name": "데이트레이딩 전략",
+                "strategy_type": "day_trading",
+                "execution_interval": 300,  # 5분
+                "max_positions": 2,
+                "stop_loss": 0.03,  # 3%
+                "take_profit": 0.05,  # 5%
+                "position_size": 0.2  # 20%
+            },
+            "swing": {
+                "strategy_name": "스윙트레이딩 전략",
+                "strategy_type": "swing_trading",
+                "execution_interval": 3600,  # 1시간
+                "max_positions": 1,
+                "stop_loss": 0.05,  # 5%
+                "take_profit": 0.10,  # 10%
+                "position_size": 0.3  # 30%
+            },
+            "longterm": {
+                "strategy_name": "롱텀 전략",
+                "strategy_type": "long_term",
+                "execution_interval": 86400,  # 1일
+                "max_positions": 1,
+                "stop_loss": 0.10,  # 10%
+                "take_profit": 0.20,  # 20%
+                "position_size": 0.5  # 50%
+            }
+        }
+        
+        if strategy_type not in strategy_configs:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 전략 타입: {strategy_type}")
+        
+        config = strategy_configs[strategy_type]
+        
+        # 자동거래 엔진 가져오기
+        from trading.auto_trading_engine import get_trading_engine
+        
+        trading_engine = get_trading_engine(
+            trading_mode="paper",
+            initial_capital=user_preferences.get("max_position_size", 0.3) * 1000000
+        )
+        
+        # 기존 거래가 실행 중이면 중지
+        if trading_engine.is_running:
+            logger.info("🛑 기존 거래 중지 시작")
+            await trading_engine.stop_strategy()
+            logger.info("✅ 기존 거래 중지 완료")
+            
+            # 잠시 대기하여 완전히 중지되도록 함
+            import asyncio
+            await asyncio.sleep(1)
+            
+            # 중지 확인
+            if trading_engine.is_running:
+                logger.warning("⚠️ 거래 중지 실패, 강제 중지 시도")
+                trading_engine.is_running = False
+                if hasattr(trading_engine, 'strategy_task') and trading_engine.strategy_task:
+                    trading_engine.strategy_task.cancel()
+                if hasattr(trading_engine, 'monitoring_task') and trading_engine.monitoring_task:
+                    trading_engine.monitoring_task.cancel()
+        
+        # StrategyManager에서도 기존 전통적 전략 중지
+        try:
+            from strategies.strategy_manager import strategy_manager
+            active_strategies = strategy_manager.get_active_strategies()
+            traditional_strategies = [s for s in active_strategies if s.startswith('traditional_')]
+            
+            if traditional_strategies:
+                logger.info(f"🛑 기존 전통적 전략 중지: {traditional_strategies}")
+                for strategy_id in traditional_strategies:
+                    strategy_manager.stop_strategy(strategy_id)
+                logger.info("✅ 기존 전통적 전략 중지 완료")
+        except Exception as e:
+            logger.error(f"기존 전통적 전략 중지 실패: {e}")
+        
+        # AutoTradingEngine 강제 중지 (기존 전통적 전략이 있는 경우)
+        if trading_engine.is_running:
+            logger.info("🛑 AutoTradingEngine 강제 중지")
+            trading_engine.is_running = False
+            if hasattr(trading_engine, 'strategy_task') and trading_engine.strategy_task:
+                trading_engine.strategy_task.cancel()
+            if hasattr(trading_engine, 'monitoring_task') and trading_engine.monitoring_task:
+                trading_engine.monitoring_task.cancel()
+            logger.info("✅ AutoTradingEngine 강제 중지 완료")
+        
+        # 전략 데이터 생성
+        strategy_data = {
+            "strategy_id": f"traditional_{strategy_type}",
+            "strategy_name": config["strategy_name"],
+            "strategy_type": config["strategy_type"],
+            "confidence_score": 0.8,
+            "technical_signals": {},
+            "ml_signals": {},
+            "pattern_analysis": {},
+            "target_symbols": symbols  # 대상 코인 추가
+        }
+        
+        # 전략 실행
+        logger.info(f"🔄 trading_engine.start_strategy 호출 시작")
+        logger.info(f"strategy_data: {strategy_data}")
+        logger.info(f"config: {config}")
+        
+        try:
+            trading_result = await trading_engine.start_strategy(strategy_data, config)
+            logger.info(f"✅ trading_engine.start_strategy 성공: {trading_result}")
+        except Exception as e:
+            logger.error(f"❌ trading_engine.start_strategy 실패: {e}", exc_info=True)
+            raise
+        
+        # 실시간 모니터링을 위한 전략 등록
+        try:
+            from strategies.strategy_manager import strategy_manager
+            logger.info(f"전통적 전략 등록 시작: {strategy_type}")
+            strategy_id = strategy_manager.register_strategy(
+                strategy_id=f"traditional_{strategy_type}",
+                strategy_name=config["strategy_name"],
+                strategy_type=config["strategy_type"],
+                is_active=True,
+                target_symbols=symbols,
+                config=config
+            )
+            logger.info(f"전통적 전략 등록 완료: {strategy_id}")
+            logger.info(f"현재 활성 전략 수: {len(strategy_manager.get_active_strategies())}")
+        except Exception as e:
+            logger.error(f"전통적 전략 등록 실패: {e}", exc_info=True)
+        
+        return {
+            "success": True,
+            "message": f"{config['strategy_name']}이 실행되었습니다",
+            "strategy": {
+                "name": config["strategy_name"],
+                "type": config["strategy_type"],
+                "execution_interval": config["execution_interval"],
+                "max_positions": config["max_positions"],
+                "stop_loss": config["stop_loss"],
+                "take_profit": config["take_profit"]
+            },
+            "trading": trading_result
+        }
+        
+    except Exception as e:
+        logger.error(f"전통적 전략 선택 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"전통적 전략 선택 실패: {str(e)}")
+
+
+async def _calculate_scalping_strategy(market_data: Dict[str, pd.DataFrame], initial_capital: float) -> TraditionalStrategyResult:
+    """스캘핑 전략 수익률 계산"""
+    try:
+        total_trades = 0
+        winning_trades = 0
+        trade_returns = []
+        max_drawdown = 0
+        current_drawdown = 0
+        peak_capital = initial_capital
+        current_capital = initial_capital
+        
+        for symbol, data in market_data.items():
+            if len(data) < 100:  # 최소 데이터 요구량
+                continue
+                
+            # RSI 기반 스캘핑 신호 생성
+            rsi = technical_analyzer.calculate_rsi(data['close'], 14)
+            
+            for i in range(50, len(data)):  # 충분한 데이터 확보 후 시작
+                if pd.isna(rsi.iloc[i]):
+                    continue
+                    
+                current_price = data['close'].iloc[i]
+                
+                # 매수 신호: RSI < 30 (과매도)
+                if rsi.iloc[i] < 30:
+                    # 1% 수익률로 매도 (스캘핑)
+                    target_price = current_price * 1.01
+                    
+                    # 다음 캔들에서 목표가 달성 확인
+                    for j in range(i+1, min(i+10, len(data))):  # 최대 10캔들 내
+                        if data['high'].iloc[j] >= target_price:
+                            trade_return = 0.01  # 1% 수익
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['low'].iloc[j] <= current_price * 0.995:  # 0.5% 손절
+                            trade_return = -0.005
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 매도 신호: RSI > 70 (과매수)
+                elif rsi.iloc[i] > 70:
+                    # 1% 수익률로 매도
+                    target_price = current_price * 0.99
+                    
+                    for j in range(i+1, min(i+10, len(data))):
+                        if data['low'].iloc[j] <= target_price:
+                            trade_return = 0.01
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['high'].iloc[j] >= current_price * 1.005:  # 0.5% 손절
+                            trade_return = -0.005
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 드로다운 계산
+                if current_capital > peak_capital:
+                    peak_capital = current_capital
+                    current_drawdown = 0
+                else:
+                    current_drawdown = (peak_capital - current_capital) / peak_capital
+                    max_drawdown = max(max_drawdown, current_drawdown)
+        
+        # 결과 계산
+        total_return = (current_capital - initial_capital) / initial_capital
+        annual_return = total_return * (365 / 30)  # 30일 기준 연환산
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        avg_trade_return = np.mean(trade_returns) if trade_returns else 0
+        volatility = np.std(trade_returns) if trade_returns else 0
+        sharpe_ratio = avg_trade_return / volatility if volatility > 0 else 0
+        
+        # 리스크 레벨 결정
+        if max_drawdown > 0.1 or volatility > 0.05:
+            risk_level = "high"
+        elif max_drawdown > 0.05 or volatility > 0.03:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # 추천 메시지
+        if total_return > 0.1:
+            recommendation = "높은 수익률을 보이는 스캘핑 전략입니다. 단, 높은 변동성을 고려해야 합니다."
+        elif total_return > 0.05:
+            recommendation = "적당한 수익률을 보이는 스캘핑 전략입니다."
+        else:
+            recommendation = "수익률이 낮은 스캘핑 전략입니다. 다른 전략을 고려해보세요."
+        
+        return TraditionalStrategyResult(
+            strategy_name="스캘핑 전략",
+            strategy_type="scalping",
+            total_return=total_return,
+            annual_return=annual_return,
+            max_drawdown=max_drawdown,
+            sharpe_ratio=sharpe_ratio,
+            win_rate=win_rate,
+            total_trades=total_trades,
+            avg_trade_return=avg_trade_return,
+            best_trade=max(trade_returns) if trade_returns else 0,
+            worst_trade=min(trade_returns) if trade_returns else 0,
+            volatility=volatility,
+            risk_level=risk_level,
+            recommendation=recommendation
+        )
+        
+    except Exception as e:
+        logger.error(f"스캘핑 전략 계산 오류: {e}")
+        return TraditionalStrategyResult(
+            strategy_name="스캘핑 전략",
+            strategy_type="scalping",
+            total_return=0,
+            annual_return=0,
+            max_drawdown=0,
+            sharpe_ratio=0,
+            win_rate=0,
+            total_trades=0,
+            avg_trade_return=0,
+            best_trade=0,
+            worst_trade=0,
+            volatility=0,
+            risk_level="unknown",
+            recommendation="계산 오류가 발생했습니다."
+        )
+
+
+async def _calculate_daytrading_strategy(market_data: Dict[str, pd.DataFrame], initial_capital: float) -> TraditionalStrategyResult:
+    """데이트레이딩 전략 수익률 계산"""
+    try:
+        total_trades = 0
+        winning_trades = 0
+        trade_returns = []
+        max_drawdown = 0
+        current_drawdown = 0
+        peak_capital = initial_capital
+        current_capital = initial_capital
+        
+        for symbol, data in market_data.items():
+            if len(data) < 200:  # 최소 데이터 요구량
+                continue
+                
+            # MACD 기반 데이트레이딩 신호
+            macd_data = technical_analyzer.calculate_macd(data['close'])
+            macd = macd_data['macd']
+            signal = macd_data['signal']
+            histogram = macd_data['histogram']
+            
+            for i in range(100, len(data)):  # 충분한 데이터 확보 후 시작
+                if pd.isna(macd.iloc[i]) or pd.isna(signal.iloc[i]):
+                    continue
+                    
+                current_price = data['close'].iloc[i]
+                
+                # 매수 신호: MACD > Signal and Histogram > 0
+                if macd.iloc[i] > signal.iloc[i] and histogram.iloc[i] > 0:
+                    # 3% 수익률로 매도 (데이트레이딩)
+                    target_price = current_price * 1.03
+                    stop_loss_price = current_price * 0.97
+                    
+                    # 다음 캔들들에서 목표가 또는 손절가 달성 확인
+                    for j in range(i+1, min(i+24, len(data))):  # 최대 24시간 (1일)
+                        if data['high'].iloc[j] >= target_price:
+                            trade_return = 0.03  # 3% 수익
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['low'].iloc[j] <= stop_loss_price:
+                            trade_return = -0.03  # 3% 손실
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 매도 신호: MACD < Signal and Histogram < 0
+                elif macd.iloc[i] < signal.iloc[i] and histogram.iloc[i] < 0:
+                    # 3% 수익률로 매도
+                    target_price = current_price * 0.97
+                    stop_loss_price = current_price * 1.03
+                    
+                    for j in range(i+1, min(i+24, len(data))):
+                        if data['low'].iloc[j] <= target_price:
+                            trade_return = 0.03
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['high'].iloc[j] >= stop_loss_price:
+                            trade_return = -0.03
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 드로다운 계산
+                if current_capital > peak_capital:
+                    peak_capital = current_capital
+                    current_drawdown = 0
+                else:
+                    current_drawdown = (peak_capital - current_capital) / peak_capital
+                    max_drawdown = max(max_drawdown, current_drawdown)
+        
+        # 결과 계산
+        total_return = (current_capital - initial_capital) / initial_capital
+        annual_return = total_return * (365 / 30)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        avg_trade_return = np.mean(trade_returns) if trade_returns else 0
+        volatility = np.std(trade_returns) if trade_returns else 0
+        sharpe_ratio = avg_trade_return / volatility if volatility > 0 else 0
+        
+        # 리스크 레벨 결정
+        if max_drawdown > 0.15 or volatility > 0.08:
+            risk_level = "high"
+        elif max_drawdown > 0.08 or volatility > 0.05:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # 추천 메시지
+        if total_return > 0.15:
+            recommendation = "높은 수익률을 보이는 데이트레이딩 전략입니다."
+        elif total_return > 0.08:
+            recommendation = "적당한 수익률을 보이는 데이트레이딩 전략입니다."
+        else:
+            recommendation = "수익률이 낮은 데이트레이딩 전략입니다. 다른 전략을 고려해보세요."
+        
+        return TraditionalStrategyResult(
+            strategy_name="데이트레이딩 전략",
+            strategy_type="daytrading",
+            total_return=total_return,
+            annual_return=annual_return,
+            max_drawdown=max_drawdown,
+            sharpe_ratio=sharpe_ratio,
+            win_rate=win_rate,
+            total_trades=total_trades,
+            avg_trade_return=avg_trade_return,
+            best_trade=max(trade_returns) if trade_returns else 0,
+            worst_trade=min(trade_returns) if trade_returns else 0,
+            volatility=volatility,
+            risk_level=risk_level,
+            recommendation=recommendation
+        )
+        
+    except Exception as e:
+        logger.error(f"데이트레이딩 전략 계산 오류: {e}")
+        return TraditionalStrategyResult(
+            strategy_name="데이트레이딩 전략",
+            strategy_type="daytrading",
+            total_return=0,
+            annual_return=0,
+            max_drawdown=0,
+            sharpe_ratio=0,
+            win_rate=0,
+            total_trades=0,
+            avg_trade_return=0,
+            best_trade=0,
+            worst_trade=0,
+            volatility=0,
+            risk_level="unknown",
+            recommendation="계산 오류가 발생했습니다."
+        )
+
+
+async def _calculate_swing_strategy(market_data: Dict[str, pd.DataFrame], initial_capital: float) -> TraditionalStrategyResult:
+    """스윙트레이딩 전략 수익률 계산"""
+    try:
+        total_trades = 0
+        winning_trades = 0
+        trade_returns = []
+        max_drawdown = 0
+        current_drawdown = 0
+        peak_capital = initial_capital
+        current_capital = initial_capital
+        
+        for symbol, data in market_data.items():
+            if len(data) < 200:
+                continue
+                
+            # 이동평균선 기반 스윙트레이딩
+            sma_20 = technical_analyzer.calculate_sma(data['close'], 20)
+            sma_50 = technical_analyzer.calculate_sma(data['close'], 50)
+            
+            for i in range(100, len(data)):
+                if pd.isna(sma_20.iloc[i]) or pd.isna(sma_50.iloc[i]):
+                    continue
+                    
+                current_price = data['close'].iloc[i]
+                
+                # 매수 신호: SMA20 > SMA50 (골든크로스)
+                if sma_20.iloc[i] > sma_50.iloc[i] and sma_20.iloc[i-1] <= sma_50.iloc[i-1]:
+                    # 10% 수익률로 매도 (스윙트레이딩)
+                    target_price = current_price * 1.10
+                    stop_loss_price = current_price * 0.90
+                    
+                    # 다음 캔들들에서 목표가 또는 손절가 달성 확인
+                    for j in range(i+1, min(i+168, len(data))):  # 최대 1주일
+                        if data['high'].iloc[j] >= target_price:
+                            trade_return = 0.10  # 10% 수익
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['low'].iloc[j] <= stop_loss_price:
+                            trade_return = -0.10  # 10% 손실
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 매도 신호: SMA20 < SMA50 (데드크로스)
+                elif sma_20.iloc[i] < sma_50.iloc[i] and sma_20.iloc[i-1] >= sma_50.iloc[i-1]:
+                    # 10% 수익률로 매도
+                    target_price = current_price * 0.90
+                    stop_loss_price = current_price * 1.10
+                    
+                    for j in range(i+1, min(i+168, len(data))):
+                        if data['low'].iloc[j] <= target_price:
+                            trade_return = 0.10
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['high'].iloc[j] >= stop_loss_price:
+                            trade_return = -0.10
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 드로다운 계산
+                if current_capital > peak_capital:
+                    peak_capital = current_capital
+                    current_drawdown = 0
+                else:
+                    current_drawdown = (peak_capital - current_capital) / peak_capital
+                    max_drawdown = max(max_drawdown, current_drawdown)
+        
+        # 결과 계산
+        total_return = (current_capital - initial_capital) / initial_capital
+        annual_return = total_return * (365 / 30)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        avg_trade_return = np.mean(trade_returns) if trade_returns else 0
+        volatility = np.std(trade_returns) if trade_returns else 0
+        sharpe_ratio = avg_trade_return / volatility if volatility > 0 else 0
+        
+        # 리스크 레벨 결정
+        if max_drawdown > 0.20 or volatility > 0.10:
+            risk_level = "high"
+        elif max_drawdown > 0.10 or volatility > 0.06:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # 추천 메시지
+        if total_return > 0.20:
+            recommendation = "높은 수익률을 보이는 스윙트레이딩 전략입니다."
+        elif total_return > 0.10:
+            recommendation = "적당한 수익률을 보이는 스윙트레이딩 전략입니다."
+        else:
+            recommendation = "수익률이 낮은 스윙트레이딩 전략입니다. 다른 전략을 고려해보세요."
+        
+        return TraditionalStrategyResult(
+            strategy_name="스윙트레이딩 전략",
+            strategy_type="swing",
+            total_return=total_return,
+            annual_return=annual_return,
+            max_drawdown=max_drawdown,
+            sharpe_ratio=sharpe_ratio,
+            win_rate=win_rate,
+            total_trades=total_trades,
+            avg_trade_return=avg_trade_return,
+            best_trade=max(trade_returns) if trade_returns else 0,
+            worst_trade=min(trade_returns) if trade_returns else 0,
+            volatility=volatility,
+            risk_level=risk_level,
+            recommendation=recommendation
+        )
+        
+    except Exception as e:
+        logger.error(f"스윙트레이딩 전략 계산 오류: {e}")
+        return TraditionalStrategyResult(
+            strategy_name="스윙트레이딩 전략",
+            strategy_type="swing",
+            total_return=0,
+            annual_return=0,
+            max_drawdown=0,
+            sharpe_ratio=0,
+            win_rate=0,
+            total_trades=0,
+            avg_trade_return=0,
+            best_trade=0,
+            worst_trade=0,
+            volatility=0,
+            risk_level="unknown",
+            recommendation="계산 오류가 발생했습니다."
+        )
+
+
+async def _calculate_longterm_strategy(market_data: Dict[str, pd.DataFrame], initial_capital: float) -> TraditionalStrategyResult:
+    """롱텀 전략 수익률 계산"""
+    try:
+        total_trades = 0
+        winning_trades = 0
+        trade_returns = []
+        max_drawdown = 0
+        current_drawdown = 0
+        peak_capital = initial_capital
+        current_capital = initial_capital
+        
+        for symbol, data in market_data.items():
+            if len(data) < 200:
+                continue
+                
+            # 200일 이동평균선 기반 롱텀 전략
+            sma_200 = technical_analyzer.calculate_sma(data['close'], 200)
+            
+            for i in range(200, len(data)):
+                if pd.isna(sma_200.iloc[i]):
+                    continue
+                    
+                current_price = data['close'].iloc[i]
+                
+                # 매수 신호: 가격 > SMA200 (상승 추세)
+                if current_price > sma_200.iloc[i] and data['close'].iloc[i-1] <= sma_200.iloc[i-1]:
+                    # 20% 수익률로 매도 (롱텀)
+                    target_price = current_price * 1.20
+                    stop_loss_price = current_price * 0.80
+                    
+                    # 다음 캔들들에서 목표가 또는 손절가 달성 확인
+                    for j in range(i+1, len(data)):  # 전체 기간
+                        if data['high'].iloc[j] >= target_price:
+                            trade_return = 0.20  # 20% 수익
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['low'].iloc[j] <= stop_loss_price:
+                            trade_return = -0.20  # 20% 손실
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 매도 신호: 가격 < SMA200 (하락 추세)
+                elif current_price < sma_200.iloc[i] and data['close'].iloc[i-1] >= sma_200.iloc[i-1]:
+                    # 20% 수익률로 매도
+                    target_price = current_price * 0.80
+                    stop_loss_price = current_price * 1.20
+                    
+                    for j in range(i+1, len(data)):
+                        if data['low'].iloc[j] <= target_price:
+                            trade_return = 0.20
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            winning_trades += 1
+                            break
+                        elif data['high'].iloc[j] >= stop_loss_price:
+                            trade_return = -0.20
+                            trade_returns.append(trade_return)
+                            current_capital *= (1 + trade_return)
+                            total_trades += 1
+                            break
+                
+                # 드로다운 계산
+                if current_capital > peak_capital:
+                    peak_capital = current_capital
+                    current_drawdown = 0
+                else:
+                    current_drawdown = (peak_capital - current_capital) / peak_capital
+                    max_drawdown = max(max_drawdown, current_drawdown)
+        
+        # 결과 계산
+        total_return = (current_capital - initial_capital) / initial_capital
+        annual_return = total_return * (365 / 30)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        avg_trade_return = np.mean(trade_returns) if trade_returns else 0
+        volatility = np.std(trade_returns) if trade_returns else 0
+        sharpe_ratio = avg_trade_return / volatility if volatility > 0 else 0
+        
+        # 리스크 레벨 결정
+        if max_drawdown > 0.30 or volatility > 0.15:
+            risk_level = "high"
+        elif max_drawdown > 0.15 or volatility > 0.08:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # 추천 메시지
+        if total_return > 0.30:
+            recommendation = "높은 수익률을 보이는 롱텀 전략입니다."
+        elif total_return > 0.15:
+            recommendation = "적당한 수익률을 보이는 롱텀 전략입니다."
+        else:
+            recommendation = "수익률이 낮은 롱텀 전략입니다. 다른 전략을 고려해보세요."
+        
+        return TraditionalStrategyResult(
+            strategy_name="롱텀 전략",
+            strategy_type="longterm",
+            total_return=total_return,
+            annual_return=annual_return,
+            max_drawdown=max_drawdown,
+            sharpe_ratio=sharpe_ratio,
+            win_rate=win_rate,
+            total_trades=total_trades,
+            avg_trade_return=avg_trade_return,
+            best_trade=max(trade_returns) if trade_returns else 0,
+            worst_trade=min(trade_returns) if trade_returns else 0,
+            volatility=volatility,
+            risk_level=risk_level,
+            recommendation=recommendation
+        )
+        
+    except Exception as e:
+        logger.error(f"롱텀 전략 계산 오류: {e}")
+        return TraditionalStrategyResult(
+            strategy_name="롱텀 전략",
+            strategy_type="longterm",
+            total_return=0,
+            annual_return=0,
+            max_drawdown=0,
+            sharpe_ratio=0,
+            win_rate=0,
+            total_trades=0,
+            avg_trade_return=0,
+            best_trade=0,
+            worst_trade=0,
+            volatility=0,
+            risk_level="unknown",
+            recommendation="계산 오류가 발생했습니다."
+        )
+
+
 async def _comprehensive_market_analysis(market_data: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
     """종합 시장 분석"""
     analysis = {
@@ -394,7 +1306,8 @@ async def _comprehensive_market_analysis(market_data: Dict[str, pd.DataFrame]) -
 
 
 def _create_basic_recommendations(market_analysis: Dict) -> List[StrategyRecommendation]:
-    """실제 시장 분석 기반 AI 추천 생성"""
+    """사용자 성향을 고려한 AI 추천 생성"""
+    global user_preferences
     recommendations = []
     
     try:
@@ -416,50 +1329,93 @@ def _create_basic_recommendations(market_analysis: Dict) -> List[StrategyRecomme
         buy_signals = [s for s in btc_signals if s.get("type") == "buy"]
         sell_signals = [s for s in btc_signals if s.get("type") == "sell"]
         
-        logger.info(f"시장 분석 결과: trend={market_trend}, volatility={volatility}, buy_signals={len(buy_signals)}, sell_signals={len(sell_signals)}")
+        # 사용자 성향에 따른 임계값 조정
+        trading_style = user_preferences.get("trading_style", "balanced")
+        risk_tolerance = user_preferences.get("risk_tolerance", "medium")
         
-        # 1. 매수 신호가 강한 경우 - 적극적 매수 전략
-        if len(buy_signals) > len(sell_signals) and btc_ml.get("signal_type") == "BUY":
-            confidence = min(0.9, 0.7 + (len(buy_signals) * 0.1))
-            expected_return = 0.15 + (btc_ml.get("confidence", 0.5) * 0.1)
+        logger.info(f"시장 분석 결과: trend={market_trend}, volatility={volatility}, buy_signals={len(buy_signals)}, sell_signals={len(sell_signals)}")
+        logger.info(f"사용자 성향: trading_style={trading_style}, risk_tolerance={risk_tolerance}")
+        
+        # 1. 상승장인 경우 - 사용자 성향에 따른 매수 전략
+        if market_trend == "bullish" and len(buy_signals) > len(sell_signals):
+            # 사용자 성향에 따른 전략 조정
+            if trading_style == "aggressive":
+                confidence = min(0.95, 0.8 + (len(buy_signals) * 0.1))
+                expected_return = 0.20 + (btc_ml.get("confidence", 0.5) * 0.1)
+                strategy_name = "상승장 공격적 매수 전략"
+                risk_level = "high"
+                validity_period = 180  # 3시간
+            elif trading_style == "conservative":
+                confidence = min(0.8, 0.6 + (len(buy_signals) * 0.05))
+                expected_return = 0.10 + (btc_ml.get("confidence", 0.5) * 0.05)
+                strategy_name = "상승장 안전 매수 전략"
+                risk_level = "medium"
+                validity_period = 240  # 4시간
+            else:  # balanced
+                confidence = min(0.9, 0.7 + (len(buy_signals) * 0.1))
+                expected_return = 0.15 + (btc_ml.get("confidence", 0.5) * 0.1)
+                strategy_name = "상승장 균형 매수 전략"
+                risk_level = "high"
+                validity_period = 120  # 2시간
             
             rec = StrategyRecommendation(
-                strategy_id="aggressive_buy_strategy",
-                strategy_name="적극적 매수 전략",
+                strategy_id=f"bull_market_{trading_style}",
+                strategy_name=strategy_name,
                 strategy_type="momentum",
                 confidence_score=confidence,
                 expected_return=expected_return,
-                risk_level="high",
+                risk_level=risk_level,
                 market_conditions=market_analysis,
-                reasoning=f"강한 매수 신호({len(buy_signals)}개)와 ML 예측(BUY, {btc_ml.get('confidence', 0.5):.1f})을 기반으로 한 적극적 매수 전략",
+                reasoning=f"상승장 확인과 강한 매수 신호({len(buy_signals)}개)를 기반으로 한 {trading_style} 매수 전략",
                 technical_signals=technical_signals,
                 ml_signals=ml_predictions,
                 pattern_analysis=market_analysis.get("pattern_analysis", {}),
-                recommendation_reason=f"현재 {len(buy_signals)}개의 매수 신호와 ML 예측으로 상승 추세가 확인되어 적극적 매수 전략을 추천합니다",
-                validity_period=120,  # 2시간
+                recommendation_reason=f"현재 상승장이 확인되어 {trading_style} 매수 전략을 추천합니다",
+                validity_period=validity_period,
                 created_at=datetime.now()
             )
             recommendations.append(rec)
         
-        # 2. 하락 추세인 경우 - 공매도 또는 대기 전략
-        elif market_trend == "bearish" and len(sell_signals) > 0:
-            rec = StrategyRecommendation(
-                strategy_id="bear_market_strategy",
-                strategy_name="하락장 대응 전략",
-                strategy_type="defensive",
-                confidence_score=0.8,
-                expected_return=-0.05,  # 손실 최소화
-                risk_level="low",
-                market_conditions=market_analysis,
-                reasoning=f"하락 추세와 {len(sell_signals)}개의 매도 신호를 기반으로 한 방어적 전략",
-                technical_signals=technical_signals,
-                ml_signals=ml_predictions,
-                pattern_analysis=market_analysis.get("pattern_analysis", {}),
-                recommendation_reason=f"현재 하락 추세가 확인되어 리스크를 최소화하는 방어적 전략을 추천합니다",
-                validity_period=240,  # 4시간
-                created_at=datetime.now()
-            )
-            recommendations.append(rec)
+        # 2. 하락장인 경우 - 사용자 성향에 따른 방어 전략
+        elif market_trend == "bearish" and len(sell_signals) > len(buy_signals) * 1.5:
+            if trading_style == "aggressive":
+                # 공격적 투자자는 하락장에서도 기회를 찾음
+                rec = StrategyRecommendation(
+                    strategy_id="bear_market_aggressive",
+                    strategy_name="하락장 역발상 전략",
+                    strategy_type="contrarian",
+                    confidence_score=0.7,
+                    expected_return=0.05,  # 하락장에서도 수익 추구
+                    risk_level="high",
+                    market_conditions=market_analysis,
+                    reasoning=f"하락장에서도 기회를 찾는 공격적 전략 - {len(sell_signals)}개 매도 신호 무시",
+                    technical_signals=technical_signals,
+                    ml_signals=ml_predictions,
+                    pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                    recommendation_reason=f"하락장이지만 공격적 투자 성향으로 역발상 기회를 추구합니다",
+                    validity_period=120,  # 2시간
+                    created_at=datetime.now()
+                )
+                recommendations.append(rec)
+            else:
+                # 보수적/균형 투자자는 방어적 전략
+                rec = StrategyRecommendation(
+                    strategy_id="bear_market_defensive",
+                    strategy_name="하락장 방어 전략",
+                    strategy_type="defensive",
+                    confidence_score=0.8,
+                    expected_return=-0.02,  # 손실 최소화
+                    risk_level="low",
+                    market_conditions=market_analysis,
+                    reasoning=f"하락장 확인과 {len(sell_signals)}개의 매도 신호를 기반으로 한 방어적 전략",
+                    technical_signals=technical_signals,
+                    ml_signals=ml_predictions,
+                    pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                    recommendation_reason=f"현재 하락장이 명확히 확인되어 리스크를 최소화하는 방어적 전략을 추천합니다",
+                    validity_period=240,  # 4시간
+                    created_at=datetime.now()
+                )
+                recommendations.append(rec)
         
         # 3. 고변동성 시장 - 스캘핑 전략
         elif volatility == "high":
@@ -481,46 +1437,177 @@ def _create_basic_recommendations(market_analysis: Dict) -> List[StrategyRecomme
             )
             recommendations.append(rec)
         
-        # 4. 중립적 시장 - 스윙트레이딩
+        # 4. 중립적 시장 - 사용자 성향에 따른 전략
         else:
-            confidence = 0.7 + (btc_ml.get("confidence", 0.5) * 0.1)
-            expected_return = 0.12 + (btc_ml.get("strength", 0.5) * 0.05)
+            # 매수 신호가 더 많은 경우
+            if len(buy_signals) > len(sell_signals):
+                if trading_style == "aggressive":
+                    confidence = 0.8 + (btc_ml.get("confidence", 0.5) * 0.1)
+                    expected_return = 0.15 + (btc_ml.get("strength", 0.5) * 0.05)
+                    strategy_name = "중립장 공격적 스윙트레이딩"
+                    risk_level = "high"
+                elif trading_style == "conservative":
+                    confidence = 0.6 + (btc_ml.get("confidence", 0.5) * 0.05)
+                    expected_return = 0.08 + (btc_ml.get("strength", 0.5) * 0.03)
+                    strategy_name = "중립장 안전 스윙트레이딩"
+                    risk_level = "low"
+                else:  # balanced
+                    confidence = 0.7 + (btc_ml.get("confidence", 0.5) * 0.1)
+                    expected_return = 0.12 + (btc_ml.get("strength", 0.5) * 0.05)
+                    strategy_name = "중립장 균형 스윙트레이딩"
+                    risk_level = "medium"
+                
+                rec = StrategyRecommendation(
+                    strategy_id=f"swing_trading_{trading_style}",
+                    strategy_name=strategy_name,
+                    strategy_type="swing_trading",
+                    confidence_score=confidence,
+                    expected_return=expected_return,
+                    risk_level=risk_level,
+                    market_conditions=market_analysis,
+                    reasoning=f"중립적 시장에서 매수 신호 우세({len(buy_signals)}개)를 활용한 {trading_style} 스윙트레이딩 전략",
+                    technical_signals=technical_signals,
+                    ml_signals=ml_predictions,
+                    pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                    recommendation_reason=f"현재 중립적 시장에서 매수 신호가 우세하여 {trading_style} 스윙트레이딩이 적합합니다",
+                    validity_period=180,  # 3시간
+                    created_at=datetime.now()
+                )
+                recommendations.append(rec)
             
-            rec = StrategyRecommendation(
-                strategy_id="swing_trading_neutral",
-                strategy_name="중립 시장 스윙트레이딩",
-                strategy_type="swing_trading",
-                confidence_score=confidence,
-                expected_return=expected_return,
+            # 매도 신호가 더 많은 경우
+            elif len(sell_signals) > len(buy_signals):
+                if trading_style == "aggressive":
+                    # 공격적 투자자는 매도 신호가 많아도 기회를 찾음
+                    rec = StrategyRecommendation(
+                        strategy_id="contrarian_aggressive",
+                        strategy_name="중립장 역발상 전략",
+                        strategy_type="contrarian",
+                        confidence_score=0.7,
+                        expected_return=0.10,
+                        risk_level="high",
+                        market_conditions=market_analysis,
+                        reasoning=f"중립적 시장에서 매도 신호 우세({len(sell_signals)}개)를 무시하고 기회를 찾는 공격적 전략",
+                        technical_signals=technical_signals,
+                        ml_signals=ml_predictions,
+                        pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                        recommendation_reason=f"중립적 시장에서 매도 신호가 우세하지만 공격적 투자 성향으로 역발상 기회를 추구합니다",
+                        validity_period=120,  # 2시간
+                        created_at=datetime.now()
+                    )
+                    recommendations.append(rec)
+                else:
+                    # 보수적/균형 투자자는 신중한 접근
+                    rec = StrategyRecommendation(
+                        strategy_id="cautious_neutral",
+                        strategy_name="신중한 중립 전략",
+                        strategy_type="defensive",
+                        confidence_score=0.6,
+                        expected_return=0.05,
+                        risk_level="low",
+                        market_conditions=market_analysis,
+                        reasoning=f"중립적 시장에서 매도 신호 우세({len(sell_signals)}개)를 고려한 신중한 전략",
+                        technical_signals=technical_signals,
+                        ml_signals=ml_predictions,
+                        pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                        recommendation_reason=f"현재 중립적 시장에서 매도 신호가 우세하여 신중한 접근이 필요합니다",
+                        validity_period=180,  # 3시간
+                        created_at=datetime.now()
+                    )
+                    recommendations.append(rec)
+            
+            # 신호가 비슷한 경우 - 적응형 전략
+            else:
+                if trading_style == "aggressive":
+                    strategy_name = "적응형 공격 전략"
+                    confidence = 0.7
+                    expected_return = 0.12
+                    risk_level = "high"
+                elif trading_style == "conservative":
+                    strategy_name = "적응형 안전 전략"
+                    confidence = 0.6
+                    expected_return = 0.06
+                    risk_level = "low"
+                else:  # balanced
+                    strategy_name = "적응형 균형 전략"
+                    confidence = 0.65
+                    expected_return = 0.08
+                    risk_level = "medium"
+                
+                rec = StrategyRecommendation(
+                    strategy_id=f"adaptive_{trading_style}",
+                    strategy_name=strategy_name,
+                    strategy_type="adaptive",
+                    confidence_score=confidence,
+                    expected_return=expected_return,
+                    risk_level=risk_level,
+                    market_conditions=market_analysis,
+                    reasoning=f"중립적 시장에서 신호가 혼재된 상황에서 시장 변화에 적응하는 {trading_style} 전략",
+                    technical_signals=technical_signals,
+                    ml_signals=ml_predictions,
+                    pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                    recommendation_reason=f"현재 중립적 시장에서 신호가 혼재되어 {trading_style} 적응형 전략이 적합합니다",
+                    validity_period=180,  # 3시간
+                    created_at=datetime.now()
+                )
+                recommendations.append(rec)
+        
+        # 5. DCA 전략 (사용자 성향에 따라 조정)
+        if trading_style == "aggressive":
+            # 공격적 투자자는 DCA보다는 기회 포착에 집중
+            dca_rec = StrategyRecommendation(
+                strategy_id="dca_aggressive",
+                strategy_name="공격적 DCA 전략",
+                strategy_type="dca",
+                confidence_score=0.7,
+                expected_return=0.12,  # 더 높은 수익 목표
                 risk_level="medium",
                 market_conditions=market_analysis,
-                reasoning=f"중립적 시장 환경에서 중기 트렌드를 활용한 스윙트레이딩 전략",
+                reasoning="공격적 투자 성향에 맞춰 더 큰 금액으로 DCA를 실행하는 전략",
                 technical_signals=technical_signals,
                 ml_signals=ml_predictions,
                 pattern_analysis=market_analysis.get("pattern_analysis", {}),
-                recommendation_reason=f"현재 중립적 시장에서 ML 신호 강도 {btc_ml.get('strength', 0.5):.1f}를 활용한 스윙트레이딩이 적합합니다",
-                validity_period=180,  # 3시간
+                recommendation_reason="공격적 투자 성향에 맞춰 더 큰 금액으로 DCA를 실행하여 수익을 극대화합니다",
+                validity_period=1440,  # 24시간
                 created_at=datetime.now()
             )
-            recommendations.append(rec)
+        elif trading_style == "conservative":
+            # 보수적 투자자는 안전한 DCA
+            dca_rec = StrategyRecommendation(
+                strategy_id="dca_conservative",
+                strategy_name="안전한 DCA 전략",
+                strategy_type="dca",
+                confidence_score=0.9,
+                expected_return=0.05,  # 안전한 수익 목표
+                risk_level="low",
+                market_conditions=market_analysis,
+                reasoning="보수적 투자 성향에 맞춰 작은 금액으로 안전하게 DCA를 실행하는 전략",
+                technical_signals=technical_signals,
+                ml_signals=ml_predictions,
+                pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                recommendation_reason="보수적 투자 성향에 맞춰 작은 금액으로 안전하게 DCA를 실행하여 리스크를 최소화합니다",
+                validity_period=1440,  # 24시간
+                created_at=datetime.now()
+            )
+        else:  # balanced
+            # 균형 투자자는 표준 DCA
+            dca_rec = StrategyRecommendation(
+                strategy_id="dca_balanced",
+                strategy_name="균형 DCA 전략",
+                strategy_type="dca",
+                confidence_score=0.85,
+                expected_return=0.08,
+                risk_level="low",
+                market_conditions=market_analysis,
+                reasoning="균형 투자 성향에 맞춰 적절한 금액으로 DCA를 실행하는 전략",
+                technical_signals=technical_signals,
+                ml_signals=ml_predictions,
+                pattern_analysis=market_analysis.get("pattern_analysis", {}),
+                recommendation_reason="균형 투자 성향에 맞춰 적절한 금액으로 DCA를 실행하여 안정적인 수익을 추구합니다",
+                validity_period=1440,  # 24시간
+                created_at=datetime.now()
+            )
         
-        # 5. DCA 전략 (항상 추천)
-        dca_rec = StrategyRecommendation(
-            strategy_id="dca_strategy",
-            strategy_name="달러 코스트 애버리징",
-            strategy_type="dca",
-            confidence_score=0.85,
-            expected_return=0.08,
-            risk_level="low",
-            market_conditions=market_analysis,
-            reasoning="시장 변동성을 분산하여 장기적으로 안정적인 수익을 추구하는 DCA 전략",
-            technical_signals=technical_signals,
-            ml_signals=ml_predictions,
-            pattern_analysis=market_analysis.get("pattern_analysis", {}),
-            recommendation_reason="변동성이 큰 암호화폐 시장에서 리스크를 분산하는 DCA 전략을 추천합니다",
-            validity_period=1440,  # 24시간
-            created_at=datetime.now()
-        )
         recommendations.append(dca_rec)
         
         logger.info(f"실제 시장 분석 기반 추천 {len(recommendations)}개 생성 완료")
@@ -707,7 +1794,7 @@ async def _generate_strategy_recommendations(market_analysis: Dict, market_data:
 
 
 def _determine_market_conditions(analysis: Dict) -> Dict:
-    """시장 조건 판단"""
+    """시장 조건 판단 - 개선된 로직"""
     try:
         # 기술적 신호 분석
         bullish_signals = 0
@@ -725,24 +1812,46 @@ def _determine_market_conditions(analysis: Dict) -> Dict:
         # ML 예측 분석
         ml_bullish = 0
         ml_bearish = 0
+        ml_total = 0
         for symbol, prediction in analysis.get("ml_predictions", {}).items():
+            ml_total += 1
             if prediction["signal_type"] == "BUY":
                 ml_bullish += 1
             elif prediction["signal_type"] == "SELL":
                 ml_bearish += 1
         
-        # 종합 판단
+        # 가중치 기반 종합 판단 (기술적 신호 70%, ML 예측 30%)
+        technical_weight = 0.7
+        ml_weight = 0.3
+        
+        # 기술적 신호 점수
+        tech_score = 0.5  # 기본값 (중립)
         if total_signals > 0:
-            bullish_ratio = bullish_signals / total_signals
-            if bullish_ratio > 0.6:
-                analysis["overall_trend"] = "bullish"
-                analysis["market_sentiment"] = "positive"
-            elif bullish_ratio < 0.4:
-                analysis["overall_trend"] = "bearish"
-                analysis["market_sentiment"] = "negative"
-            else:
-                analysis["overall_trend"] = "neutral"
-                analysis["market_sentiment"] = "neutral"
+            tech_bullish_ratio = bullish_signals / total_signals
+            tech_score = tech_bullish_ratio
+        
+        # ML 예측 점수
+        ml_score = 0.5  # 기본값 (중립)
+        if ml_total > 0:
+            ml_bullish_ratio = ml_bullish / ml_total
+            ml_score = ml_bullish_ratio
+        
+        # 종합 점수 계산
+        overall_score = (tech_score * technical_weight) + (ml_score * ml_weight)
+        
+        # 트렌드 판단 (더 엄격한 기준 적용)
+        if overall_score > 0.65:  # 65% 이상이면 상승장
+            analysis["overall_trend"] = "bullish"
+            analysis["market_sentiment"] = "positive"
+        elif overall_score < 0.35:  # 35% 이하면 하락장
+            analysis["overall_trend"] = "bearish"
+            analysis["market_sentiment"] = "negative"
+        else:  # 35-65% 사이면 중립
+            analysis["overall_trend"] = "neutral"
+            analysis["market_sentiment"] = "neutral"
+        
+        # 디버깅을 위한 로그 추가
+        logger.info(f"시장 조건 판단: tech_score={tech_score:.3f}, ml_score={ml_score:.3f}, overall_score={overall_score:.3f}, trend={analysis['overall_trend']}")
         
         # 변동성 분석
         volatility_scores = []

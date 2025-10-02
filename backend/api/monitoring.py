@@ -70,6 +70,7 @@ class DashboardData(BaseModel):
     sharpe_ratio: float
     max_drawdown: float
     last_update: str
+    traditional_strategies: List[str] = []
 
 
 class PerformanceMetrics(BaseModel):
@@ -85,6 +86,231 @@ class PerformanceMetrics(BaseModel):
     avg_trade_return: float
     commission_impact: float
 
+
+@router.get("/strategy-status")
+async def get_strategy_status():
+    """전략 상태 조회"""
+    try:
+        from strategies.strategy_manager import strategy_manager
+        return {
+            "total_strategies": len(strategy_manager.strategies),
+            "active_strategies": len(strategy_manager.active_strategies),
+            "strategy_list": list(strategy_manager.strategies.keys()),
+            "active_list": strategy_manager.active_strategies.copy()
+        }
+    except Exception as e:
+        logger.error(f"전략 상태 조회 실패: {e}")
+        return {"error": str(e)}
+
+@router.get("/ai-strategy-details")
+async def get_ai_strategy_details():
+    """AI 추천 전략 상세 정보 조회"""
+    try:
+        from trading.auto_trading_engine import get_trading_engine
+        from strategies.strategy_manager import strategy_manager
+        
+        # 전통적 전략이 실행 중인지 확인
+        active_strategies = strategy_manager.get_active_strategies()
+        traditional_strategies = [s for s in active_strategies if s.startswith('traditional_')]
+        
+        if traditional_strategies:
+            return {"success": False, "message": "전통적 전략이 실행 중입니다"}
+        
+        trading_engine = get_trading_engine()
+        if not trading_engine or not trading_engine.is_running:
+            return {"success": False, "message": "AI 추천 전략이 실행 중이 아닙니다"}
+        
+        # 포트폴리오 요약 정보
+        status = trading_engine.get_status()
+        portfolio_summary = {
+            "total_assets": status.get('total_assets', 0),
+            "total_pnl": status.get('total_pnl', 0),
+            "pnl_percentage": status.get('pnl_percentage', 0),
+            "win_rate": status.get('win_rate', 0),
+            "max_drawdown": status.get('max_drawdown', 0)
+        }
+        
+        # 최근 거래 내역 포맷팅
+        recent_trades = []
+        for trade in trading_engine.trades[-10:]:  # 최근 10개 거래
+            if hasattr(trade, 'id'):
+                recent_trades.append({
+                    "id": getattr(trade, 'id', ''),
+                    "symbol": getattr(trade, 'symbol', ''),
+                    "side": getattr(trade, 'side', ''),
+                    "amount": getattr(trade, 'amount', 0),
+                    "price": getattr(trade, 'price', 0),
+                    "timestamp": getattr(trade, 'timestamp', ''),
+                    "status": getattr(trade, 'status', ''),
+                    "net_profit": getattr(trade, 'net_profit', 0)
+                })
+            else:
+                # 딕셔너리 형태의 거래 데이터 처리
+                recent_trades.append({
+                    "id": trade.get('id', ''),
+                    "symbol": trade.get('symbol', ''),
+                    "side": trade.get('side', ''),
+                    "amount": trade.get('amount', 0),
+                    "price": trade.get('price', 0),
+                    "timestamp": trade.get('timestamp', ''),
+                    "status": trade.get('status', ''),
+                    "net_profit": trade.get('net_profit', 0)
+                })
+        
+        # 현재 포지션 정보
+        current_positions = []
+        for symbol, pos in trading_engine.positions.items():
+            current_positions.append({
+                "symbol": symbol,
+                "amount": pos.amount,
+                "avg_price": pos.avg_price,
+                "current_price": trading_engine.market_analyzer.get_current_price(symbol) if trading_engine.market_analyzer else 0,
+                "unrealized_pnl": pos.amount * (trading_engine.market_analyzer.get_current_price(symbol) - pos.avg_price) if trading_engine.market_analyzer else 0
+            })
+        
+        return {
+            "success": True,
+            "is_trading": True,
+            "strategy": {
+                "id": getattr(trading_engine, 'current_strategy', {}).get("strategy_id", "unknown"),
+                "name": getattr(trading_engine, 'current_strategy', {}).get("strategy_name", "Unknown Strategy"),
+                "type": getattr(trading_engine, 'current_strategy', {}).get("strategy_type", "unknown")
+            },
+            "trading": {
+                "mode": trading_engine.trading_mode.value,
+                "initial_capital": trading_engine.initial_capital,
+                "current_capital": trading_engine.current_capital,
+                "total_assets": portfolio_summary.get("total_assets", 0),
+                "pnl_percentage": portfolio_summary.get("pnl_percentage", 0),
+                "total_return": portfolio_summary.get("total_pnl", 0),
+                "open_positions": len(trading_engine.positions),
+                "total_trades": len(trading_engine.trades),
+                "win_rate": portfolio_summary.get("win_rate", 0),
+                "max_drawdown": portfolio_summary.get("max_drawdown", 0)
+            },
+            "recent_trades": recent_trades,
+            "current_positions": current_positions
+        }
+    except Exception as e:
+        logger.error(f"AI 추천 전략 상세 정보 조회 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+@router.get("/traditional-strategy-details")
+async def get_traditional_strategy_details():
+    """전통적 전략 상세 정보 조회"""
+    try:
+        from strategies.strategy_manager import strategy_manager
+        from trading.auto_trading_engine import get_trading_engine
+        
+        traditional_strategies = [s for s in strategy_manager.get_active_strategies() 
+                                if s.startswith('traditional_')]
+        
+        if not traditional_strategies:
+            return {"success": False, "message": "실행 중인 전통적 전략이 없습니다"}
+        
+        # 첫 번째 전통적 전략의 정보 반환
+        strategy_id = traditional_strategies[0]
+        strategy_info = strategy_manager.strategies.get(strategy_id)
+        
+        if not strategy_info:
+            return {"success": False, "message": "전략 정보를 찾을 수 없습니다"}
+        
+        # 거래 엔진에서 포트폴리오 정보 가져오기
+        trading_engine = get_trading_engine()
+        if trading_engine:
+            status = trading_engine.get_status()
+            positions = list(trading_engine.positions.values()) if hasattr(trading_engine, 'positions') else []
+            trades = trading_engine.trades[-50:] if hasattr(trading_engine, 'trades') else []
+        else:
+            status = {}
+            positions = []
+            trades = []
+        
+        # 수익률 계산
+        total_return = status.get('pnl_percentage', 0)
+        pnl_percentage = total_return
+        
+        # 최근 거래 내역 포맷팅
+        recent_trades = []
+        for trade in trades[-10:]:  # 최근 10개 거래
+            if hasattr(trade, 'id'):
+                recent_trades.append({
+                    "id": getattr(trade, 'id', ''),
+                    "symbol": getattr(trade, 'symbol', ''),
+                    "side": getattr(trade, 'side', ''),
+                    "amount": getattr(trade, 'amount', 0),
+                    "price": getattr(trade, 'price', 0),
+                    "timestamp": getattr(trade, 'timestamp', ''),
+                    "status": getattr(trade, 'status', ''),
+                    "net_profit": getattr(trade, 'net_profit', 0)
+                })
+            else:
+                # 딕셔너리 형태의 거래 데이터 처리
+                recent_trades.append({
+                    "id": trade.get('id', ''),
+                    "symbol": trade.get('symbol', ''),
+                    "side": trade.get('side', ''),
+                    "amount": trade.get('amount', 0),
+                    "price": trade.get('price', 0),
+                    "timestamp": trade.get('timestamp', ''),
+                    "status": trade.get('status', ''),
+                    "net_profit": trade.get('net_profit', 0)
+                })
+        
+        # 현재 포지션 정보
+        current_positions = []
+        for symbol, pos in trading_engine.positions.items() if trading_engine else []:
+            current_positions.append({
+                "symbol": symbol,
+                "amount": pos.amount,
+                "avg_price": pos.avg_price,
+                "current_price": trading_engine.market_analyzer.get_current_price(symbol) if trading_engine else 0,
+                "unrealized_pnl": pos.amount * (trading_engine.market_analyzer.get_current_price(symbol) - pos.avg_price) if trading_engine else 0
+            })
+        
+        return {
+            "success": True,
+            "is_trading": True,
+            "strategy": {
+                "id": strategy_id,
+                "name": strategy_info.name,
+                "type": strategy_info.config.strategy_type.value,
+                "status": strategy_info.status.value
+            },
+            "trading": {
+                "mode": "paper",
+                "initial_capital": status.get('initial_capital', 1000000),
+                "current_capital": status.get('current_capital', 1000000),
+                "total_assets": status.get('total_assets', 1000000),
+                "pnl_percentage": pnl_percentage,
+                "total_return": total_return,
+                "open_positions": len(positions),
+                "total_trades": len(trades),
+                "win_rate": calculate_win_rate(trades),
+                "max_drawdown": calculate_max_drawdown(trades)
+            },
+            "recent_trades": recent_trades,
+            "current_positions": current_positions
+        }
+    except Exception as e:
+        logger.error(f"전통적 전략 상세 정보 조회 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+def calculate_win_rate(trades):
+    """승률 계산"""
+    if not trades:
+        return 0
+    winning_trades = [t for t in trades if t.get('net_profit', 0) > 0]
+    return len(winning_trades) / len(trades) * 100
+
+def calculate_max_drawdown(trades):
+    """최대 낙폭 계산"""
+    if not trades:
+        return 0
+    cumulative_returns = np.cumsum([t.get('net_profit', 0) for t in trades])
+    running_max = np.maximum.accumulate(cumulative_returns)
+    drawdowns = (cumulative_returns - running_max) / running_max
+    return np.min(drawdowns) * 100 if len(drawdowns) > 0 else 0
 
 @router.get("/dashboard", response_model=DashboardData)
 async def get_dashboard():
@@ -125,31 +351,72 @@ async def get_dashboard():
                 drawdowns = (cumulative_returns - running_max) / running_max
                 max_drawdown = np.min(drawdowns) * 100
             
+        # 전략 매니저에서 활성 전략 수 확인
+        active_strategies_count = 0
+        try:
+            from strategies.strategy_manager import strategy_manager
+            active_strategies = strategy_manager.get_active_strategies()
+            active_strategies_count = len(active_strategies)
+            logger.info(f"활성 전략 목록: {active_strategies}")
+            logger.info(f"전체 전략 수: {len(strategy_manager.strategies)}")
+        except Exception as e:
+            logger.error(f"전략 매니저 조회 실패: {e}")
+            active_strategies_count = len(trading_engine.active_strategies) if trading_engine else 0
+            
+            # 전통적 전략 목록 가져오기
+            traditional_strategies = []
+            try:
+                from strategies.strategy_manager import strategy_manager
+                traditional_strategies = [s for s in strategy_manager.get_active_strategies() 
+                                        if s.startswith('traditional_')]
+            except Exception as e:
+                logger.error(f"전통적 전략 조회 실패: {e}")
+            
             return DashboardData(
                 total_balance=portfolio.get('total_value', 0),
                 total_return=portfolio.get('total_return', 0) * 100,
                 daily_pnl=daily_pnl,
-                active_strategies=len(trading_engine.active_strategies) if trading_engine else 0,
+                active_strategies=active_strategies_count,
                 open_positions=len(positions),
                 total_trades=len(trades),
                 win_rate=win_rate,
                 sharpe_ratio=sharpe_ratio,
                 max_drawdown=max_drawdown,
-                last_update=datetime.now().isoformat()
+                last_update=datetime.now().isoformat(),
+                traditional_strategies=traditional_strategies
             )
         else:
-            # 거래 엔진이 실행 중이 아닌 경우 기본값 반환
+            # 거래 엔진이 실행 중이 아닌 경우에도 전략 매니저에서 활성 전략 수 확인
+            active_strategies_count = 0
+            try:
+                from strategies.strategy_manager import strategy_manager
+                active_strategies = strategy_manager.get_active_strategies()
+                active_strategies_count = len(active_strategies)
+                logger.info(f"거래 엔진 미실행 상태에서 활성 전략 목록: {active_strategies}")
+            except Exception as e:
+                logger.error(f"전략 매니저 조회 실패: {e}")
+            
+            # 전통적 전략 목록 가져오기
+            traditional_strategies = []
+            try:
+                from strategies.strategy_manager import strategy_manager
+                traditional_strategies = [s for s in strategy_manager.get_active_strategies() 
+                                        if s.startswith('traditional_')]
+            except Exception as e:
+                logger.error(f"전통적 전략 조회 실패: {e}")
+            
             return DashboardData(
                 total_balance=0,
                 total_return=0,
                 daily_pnl=0,
-                active_strategies=0,
+                active_strategies=active_strategies_count,
                 open_positions=0,
                 total_trades=0,
                 win_rate=0,
                 sharpe_ratio=0,
                 max_drawdown=0,
-                last_update=datetime.now().isoformat()
+                last_update=datetime.now().isoformat(),
+                traditional_strategies=traditional_strategies
             )
             
     except Exception as e:

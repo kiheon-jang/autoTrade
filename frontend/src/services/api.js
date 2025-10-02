@@ -118,6 +118,24 @@ export const aiRecommendationAPI = {
   
   // 오토트레이딩 중지
   stopAutoTrading: () => api.post('/api/v1/ai/stop-autotrading'),
+  
+  // 사용자 선호도 설정
+  setUserPreferences: (data) => api.post('/api/v1/ai/user-preferences', data),
+  
+  // 사용자 선호도 조회
+  getUserPreferences: () => api.get('/api/v1/ai/user-preferences'),
+};
+
+// 전통적 전략 API
+export const traditionalStrategyAPI = {
+  // 전통적 전략 분석
+  analyzeTraditionalStrategies: (data) => api.post('/api/v1/ai/traditional-strategies', data),
+  
+  // 전통적 전략 선택 및 실행
+  selectTraditionalStrategy: (strategyType, symbols) => api.post(`/api/v1/ai/select-traditional-strategy?strategy_type=${strategyType}`, symbols),
+  
+  // 전통적 전략 중지
+  stopTraditionalStrategy: () => api.post('/api/v1/ai/stop-traditional-strategy'),
 };
 
 // 통합 API 객체

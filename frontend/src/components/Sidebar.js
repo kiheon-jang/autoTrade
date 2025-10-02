@@ -9,7 +9,8 @@ import {
   SettingOutlined,
   ThunderboltOutlined,
   FundOutlined,
-  RobotOutlined
+  RobotOutlined,
+  LineChartOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -85,6 +86,11 @@ const Sidebar = () => {
       key: '/ai-recommendation',
       icon: <RobotOutlined />,
       label: 'AI 전략 추천',
+    },
+    {
+      key: '/traditional-strategies',
+      icon: <LineChartOutlined />,
+      label: '전통적 전략',
     },
     // {
     //   key: '/strategies',
