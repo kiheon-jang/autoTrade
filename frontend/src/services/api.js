@@ -94,6 +94,9 @@ export const monitoringAPI = {
   
   // 알림
   getAlerts: () => api.get('/api/v1/monitoring/alerts'),
+  
+  // PnL 히스토리 조회
+  getPnlHistory: (limit = 50) => api.get(`/api/v1/monitoring/pnl-history?limit=${limit}`),
 };
 
 // AI 추천 API (백엔드 엔드포인트 사용)
@@ -138,12 +141,43 @@ export const traditionalStrategyAPI = {
   stopTraditionalStrategy: () => api.post('/api/v1/ai/stop-traditional-strategy'),
 };
 
+// ML 모델 API
+export const mlModelsAPI = {
+  // 모델 목록 조회
+  getModels: () => api.get('/api/v1/ml-models/'),
+  
+  // 모델 생성
+  createModel: (data) => api.post('/api/v1/ml-models/', data),
+  
+  // 모델 훈련
+  trainModel: (data) => api.post('/api/v1/ml-models/train', data),
+  
+  // 모델 성능 조회
+  getPerformance: (modelId) => api.get(`/api/v1/ml-models/${modelId}/performance`),
+  
+  // 모델 예측 조회
+  getPredictions: (modelId) => api.get(`/api/v1/ml-models/${modelId}/predictions`),
+  
+  // 모델 배포
+  deployModel: (data) => api.post('/api/v1/ml-models/deploy', data),
+  
+  // 모델 삭제
+  deleteModel: (modelId) => api.delete(`/api/v1/ml-models/${modelId}`),
+  
+  // 모델 상세 조회
+  getModel: (modelId) => api.get(`/api/v1/ml-models/${modelId}`),
+  
+  // 모델 업데이트
+  updateModel: (modelId, data) => api.put(`/api/v1/ml-models/${modelId}`, data),
+};
+
 // 통합 API 객체
 export const apiService = {
   ...strategyAPI,
   ...backtestingAPI,
   ...monitoringAPI,
   ...aiRecommendationAPI,
+  ...mlModelsAPI,
 };
 
 export default api;

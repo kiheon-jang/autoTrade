@@ -406,12 +406,20 @@ class RealtimeMarketAnalyzer:
                             # ML 신호 생성
                             ml_signal = self.ml_generator.generate_signal(candles)
                             
-                            # 캐시 업데이트
-                            self.ml_signals_cache[symbol] = ml_signal
+                            # 캐시 업데이트 (MLSignal 객체를 딕셔너리로 변환)
+                            ml_signal_dict = {
+                                'signal_type': ml_signal.signal_type,
+                                'confidence': ml_signal.confidence,
+                                'probability': ml_signal.probability,
+                                'strength': getattr(ml_signal, 'strength', 0.5),
+                                'model_used': ml_signal.model_used,
+                                'timestamp': ml_signal.timestamp.isoformat()
+                            }
+                            self.ml_signals_cache[symbol] = ml_signal_dict
                             self.ml_updated_at[symbol] = datetime.now()
                             
-                            if ml_signal.get('signal_type') != 'HOLD':
-                                logger.info(f"🤖 {symbol} ML 신호: {ml_signal.get('signal_type')} (신뢰도: {ml_signal.get('confidence', 0):.1%})")
+                            if ml_signal_dict.get('signal_type') != 'HOLD':
+                                logger.info(f"🤖 {symbol} ML 신호: {ml_signal_dict.get('signal_type')} (신뢰도: {ml_signal_dict.get('confidence', 0):.1%})")
                             
                     except Exception as e:
                         logger.error(f"{symbol} ML 예측 오류: {e}")

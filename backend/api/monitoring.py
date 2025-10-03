@@ -376,7 +376,32 @@ def calculate_max_drawdown(trades):
 async def get_dashboard():
     """대시보드 데이터 조회"""
     try:
-        # 거래 엔진에서 포트폴리오 정보 가져오기
+        # AI 거래 시스템에서 실시간 데이터 가져오기
+        try:
+            from api.ai_recommendation import get_trading_status
+            ai_status = await get_trading_status()
+            
+            if ai_status.get("is_trading", False):
+                trading_data = ai_status.get("trading", {})
+                
+                # AI 거래 데이터를 DashboardData 형식으로 변환
+                return DashboardData(
+                    total_balance=trading_data.get("current_capital", 0.0),
+                    total_return=trading_data.get("total_pnl", 0.0),
+                    daily_pnl=trading_data.get("pnl_percentage", 0.0),
+                    active_strategies=1,
+                    open_positions=len(trading_data.get("positions", {})),
+                    total_trades=trading_data.get("total_trades", 0),
+                    win_rate=0.0,  # TODO: 계산 로직 추가
+                    sharpe_ratio=0.0,  # TODO: 계산 로직 추가
+                    max_drawdown=0.0,  # TODO: 계산 로직 추가
+                    last_update=datetime.now().isoformat(),
+                    traditional_strategies=[]
+                )
+        except Exception as e:
+            logger.warning(f"AI 거래 데이터 조회 실패, 기본 엔진 사용: {e}")
+        
+        # 기본 거래 엔진에서 포트폴리오 정보 가져오기
         trading_engine = get_trading_engine()
         if trading_engine and trading_engine.is_running:
             portfolio = trading_engine.get_portfolio_summary()
@@ -483,10 +508,84 @@ async def get_dashboard():
         raise HTTPException(status_code=500, detail=f"대시보드 데이터 조회 실패: {str(e)}")
 
 
+@router.get("/trades")
+async def get_trades(limit: int = Query(100, ge=1, le=1000)):
+    """거래 내역 조회"""
+    try:
+        # AI 거래 시스템에서 거래 내역 가져오기
+        try:
+            from api.ai_recommendation import get_trading_status
+            ai_status = await get_trading_status()
+            
+            if ai_status.get("is_trading", False):
+                trading_data = ai_status.get("trading", {})
+                trades = trading_data.get("trades", [])
+                
+                # 거래 내역을 모니터링 형식으로 변환
+                formatted_trades = []
+                for trade in trades[-limit:]:  # 최근 거래만
+                    formatted_trades.append({
+                        "id": trade.get("id", ""),
+                        "symbol": trade.get("symbol", ""),
+                        "side": trade.get("side", ""),
+                        "amount": trade.get("amount", 0.0),
+                        "price": trade.get("price", 0.0),
+                        "timestamp": trade.get("timestamp", ""),
+                        "status": trade.get("status", ""),
+                        "commission": trade.get("commission", 0.0),
+                        "net_profit": 0.0,  # TODO: 계산 로직 추가
+                        "gross_profit": 0.0  # TODO: 계산 로직 추가
+                    })
+                
+                return {
+                    "success": True,
+                    "trades": formatted_trades,
+                    "total": len(formatted_trades)
+                }
+        except Exception as e:
+            logger.warning(f"AI 거래 데이터 조회 실패, 기본 엔진 사용: {e}")
+        
+        # 기본 거래 엔진에서 거래 내역 가져오기
+        trading_engine = get_trading_engine()
+        if not trading_engine or not trading_engine.is_running:
+            return {"success": False, "trades": [], "total": 0}
+        
+        trades = trading_engine.get_recent_trades(limit)
+        return {"success": True, "trades": trades, "total": len(trades)}
+        
+    except Exception as e:
+        logger.error(f"거래 내역 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="거래 내역 조회 실패")
+
 @router.get("/performance", response_model=PerformanceMetrics)
 async def get_performance_metrics():
     """성과 지표 조회"""
     try:
+        # AI 거래 시스템에서 성과 데이터 가져오기
+        try:
+            from api.ai_recommendation import get_trading_status
+            ai_status = await get_trading_status()
+            
+            if ai_status.get("is_trading", False):
+                trading_data = ai_status.get("trading", {})
+                
+                # AI 거래 데이터를 성과 지표로 변환
+                return PerformanceMetrics(
+                    total_return=trading_data.get("total_pnl", 0.0),
+                    annualized_return=0.0,  # TODO: 계산 로직 추가
+                    volatility=0.0,  # TODO: 계산 로직 추가
+                    sharpe_ratio=0.0,  # TODO: 계산 로직 추가
+                    sortino_ratio=0.0,  # TODO: 계산 로직 추가
+                    max_drawdown=0.0,  # TODO: 계산 로직 추가
+                    win_rate=0.0,  # TODO: 계산 로직 추가
+                    profit_factor=0.0,  # TODO: 계산 로직 추가
+                    avg_trade_return=0.0,  # TODO: 계산 로직 추가
+                    commission_impact=0.0  # TODO: 계산 로직 추가
+                )
+        except Exception as e:
+            logger.warning(f"AI 거래 데이터 조회 실패, 기본 엔진 사용: {e}")
+        
+        # 기본 거래 엔진에서 성과 지표 가져오기
         trading_engine = get_trading_engine()
         if not trading_engine or not trading_engine.is_running:
             raise HTTPException(status_code=400, detail="거래 엔진이 실행 중이 아닙니다")
@@ -862,3 +961,45 @@ async def get_alerts():
     """알림 조회"""
     # TODO: 알림 조회 구현
     return {"message": "알림 조회 기능은 구현 예정입니다"}
+
+
+@router.get("/pnl-history")
+async def get_pnl_history(limit: int = Query(50, ge=1, le=200)):
+    """PnL 히스토리 조회"""
+    try:
+        # AI 거래 시스템에서 PnL 히스토리 가져오기
+        try:
+            from api.ai_recommendation import get_trading_status
+            ai_status = await get_trading_status()
+            
+            if ai_status.get("is_trading", False):
+                trading_data = ai_status.get("trading", {})
+                current_pnl = trading_data.get("total_return", 0)
+                current_time = datetime.now().strftime("%H:%M")
+                
+                # 현재 PnL을 히스토리에 추가
+                pnl_history = [{
+                    "time": current_time,
+                    "pnl": current_pnl
+                }]
+                
+                return {
+                    "success": True,
+                    "history": pnl_history,
+                    "total": len(pnl_history)
+                }
+        except Exception as e:
+            logger.warning(f"AI 거래 데이터 조회 실패, 기본 엔진 사용: {e}")
+        
+        # 기본 거래 엔진에서 PnL 히스토리 가져오기
+        trading_engine = get_trading_engine()
+        if not trading_engine or not trading_engine.is_running:
+            return {"success": False, "history": [], "total": 0}
+        
+        # TODO: 실제 PnL 히스토리 구현
+        # 현재는 빈 배열 반환
+        return {"success": True, "history": [], "total": 0}
+        
+    except Exception as e:
+        logger.error(f"PnL 히스토리 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="PnL 히스토리 조회 실패")

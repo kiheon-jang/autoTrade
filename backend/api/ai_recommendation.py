@@ -2112,7 +2112,13 @@ async def get_trading_status():
                 "type": active_strategy['recommendation'].strategy_type,
                 "started_at": active_strategy['started_at'].isoformat()
             },
-            "trading": status,
+            "trading": {
+                **status,
+                "strategy_name": active_strategy['recommendation'].strategy_name,
+                "strategy_type": active_strategy['recommendation'].strategy_type,
+                "confidence": active_strategy['recommendation'].confidence_score,
+                "risk_level": active_strategy['recommendation'].risk_level
+            },
             "analysis": {
                 "tiers": analyzer_status,
                 "top_opportunities": recent_opportunities,

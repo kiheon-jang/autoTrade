@@ -107,6 +107,11 @@ const Sidebar = () => {
       icon: <MonitorOutlined />,
       label: '실시간 모니터링',
     },
+    {
+      key: '/ml-models',
+      icon: <RobotOutlined />,
+      label: 'ML 모델 관리',
+    },
     // {
     //   key: '/settings',
     //   icon: <SettingOutlined />,

@@ -12,6 +12,7 @@ import AIRecommendation from './pages/AIRecommendation';
 // import Strategies from './pages/Strategies';
 // import Backtesting from './pages/Backtesting';
 import Monitoring from './pages/Monitoring';
+import MLModels from './pages/MLModels';
 // import Settings from './pages/Settings';
 
 const { Content } = Layout;
@@ -53,6 +54,7 @@ function App() {
               {/* <Route path="/strategies" element={<Strategies />} /> */}
               {/* <Route path="/backtesting" element={<Backtesting />} /> */}
               <Route path="/monitoring" element={<Monitoring />} />
+              <Route path="/ml-models" element={<MLModels />} />
               {/* <Route path="/settings" element={<Settings />} /> */}
             </Routes>
           </MainContent>

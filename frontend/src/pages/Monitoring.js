@@ -29,7 +29,7 @@ import {
 } from '@ant-design/icons';
 import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { aiRecommendationAPI } from '../services/api';
+import { aiRecommendationAPI, monitoringAPI } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 // API 기본 URL 가져오기
@@ -82,43 +82,22 @@ const MonitoringContainer = styled.div.withConfig({
 
 const Monitoring = () => {
   const [tradingStatus, setTradingStatus] = useState(null);
-  const [pnlHistory, setPnlHistory] = useState([
-    { time: '09:00', pnl: 0 },
-    { time: '09:30', pnl: 150 },
-    { time: '10:00', pnl: -200 },
-    { time: '10:30', pnl: 300 },
-    { time: '11:00', pnl: 100 },
-    { time: '11:30', pnl: -150 },
-    { time: '12:00', pnl: 250 },
-    { time: '12:30', pnl: 400 },
-    { time: '13:00', pnl: 200 },
-    { time: '13:30', pnl: -100 },
-    { time: '14:00', pnl: 350 },
-    { time: '14:30', pnl: 500 },
-    { time: '15:00', pnl: 300 },
-    { time: '15:30', pnl: 150 },
-    { time: '16:00', pnl: 200 },
-    { time: '16:30', pnl: -50 },
-    { time: '17:00', pnl: 100 },
-    { time: '17:30', pnl: 250 },
-    { time: '18:00', pnl: 400 },
-    { time: '18:30', pnl: 300 },
-    { time: '19:00', pnl: 200 },
-    { time: '19:30', pnl: 150 },
-    { time: '20:00', pnl: 100 },
-    { time: '20:30', pnl: 50 },
-    { time: '21:00', pnl: -100 },
-    { time: '21:21', pnl: -443 }
-  ]);
+  const [pnlHistory, setPnlHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analysisLog, setAnalysisLog] = useState([]);
   const [aiStrategyDetails, setAiStrategyDetails] = useState(null);
+  const [isStopping, setIsStopping] = useState(false);
   const { isConnected, lastMessage } = useWebSocket();
 
   useEffect(() => {
     fetchTradingStatus();
+    fetchPnlHistory();
     const interval = setInterval(fetchTradingStatus, 5000); // 5초마다 업데이트
-    return () => clearInterval(interval);
+    const pnlInterval = setInterval(fetchPnlHistory, 10000); // 10초마다 PnL 히스토리 업데이트
+    return () => {
+      clearInterval(interval);
+      clearInterval(pnlInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -132,15 +111,10 @@ const Monitoring = () => {
       const response = await aiRecommendationAPI.getTradingStatus();
       
       if (response.is_trading) {
+        console.log('거래 데이터:', response.trading?.trades?.slice(0, 3));
         setTradingStatus(response);
         
-        // PnL 히스토리 업데이트
-        if (response.total_return !== undefined) {
-          setPnlHistory(prev => [...prev, {
-            time: new Date().toLocaleTimeString(),
-            pnl: response.total_return
-          }].slice(-20)); // 최근 20개만 유지
-        }
+        // PnL 히스토리는 별도 API에서 관리
         
         // 분석 로그 업데이트 (상위 기회들)
         if (response.analysis && response.analysis.top_opportunities) {
@@ -161,6 +135,34 @@ const Monitoring = () => {
     }
   };
 
+  const handleStopTrading = async () => {
+    try {
+      setIsStopping(true);
+      await aiRecommendationAPI.stopAutoTrading();
+      setTradingStatus(null);
+      setAiStrategyDetails({});
+      setPnlHistory([]);
+      // 성공 메시지 표시
+      console.log('거래가 성공적으로 중지되었습니다.');
+    } catch (error) {
+      console.error('거래 중지 실패:', error);
+    } finally {
+      setIsStopping(false);
+    }
+  };
+
+  const fetchPnlHistory = async () => {
+    try {
+      const response = await monitoringAPI.getPnlHistory(50);
+      const data = response.data || response;
+      if (data.success && data.history) {
+        setPnlHistory(data.history);
+      }
+    } catch (error) {
+      console.error('PnL 히스토리 조회 실패:', error);
+    }
+  };
+
   const updateTradingData = (data) => {
     setTradingStatus(prev => ({
       ...prev,
@@ -168,20 +170,15 @@ const Monitoring = () => {
     }));
   };
 
-  const handleStopTrading = async () => {
-    try {
-      await aiRecommendationAPI.stopTrading();
-      setTradingStatus(null);
-    } catch (error) {
-      console.error('거래 중지 실패:', error);
-    }
-  };
 
-  const formatTradeSide = (side) => (
-    <Tag color={side === 'buy' ? 'green' : 'red'}>
-      {side === 'buy' ? '매수' : '매도'}
-    </Tag>
-  );
+  const formatTradeSide = (side) => {
+    console.log('formatTradeSide 호출:', side);
+    return (
+      <Tag color={side === 'buy' ? 'green' : 'red'}>
+        {side === 'buy' ? '매수' : '매도'}
+      </Tag>
+    );
+  };
 
   const formatTradeStatus = (status) => {
     const statusConfig = {
@@ -487,66 +484,6 @@ const Monitoring = () => {
             </Row>
           </Card>
 
-          {/* 최근 거래 내역 (AI Strategy) */}
-          {aiStrategyDetails.recent_trades && aiStrategyDetails.recent_trades.length > 0 && (
-            <Card title="최근 거래 내역">
-              <Table
-                dataSource={aiStrategyDetails.recent_trades}
-                columns={[
-    {
-      title: '시간',
-      dataIndex: 'timestamp',
-      key: 'timestamp',
-                    render: (timestamp) => new Date(timestamp).toLocaleString()
-    },
-    {
-      title: '코인',
-      dataIndex: 'symbol',
-                    key: 'symbol'
-    },
-    {
-      title: '타입',
-                    dataIndex: 'type',
-                    key: 'type',
-                    render: (type) => (
-                      <Tag color={type === 'buy' ? 'green' : 'red'}>
-                        {type === 'buy' ? '매수' : '매도'}
-        </Tag>
-                    )
-    },
-    {
-      title: '수량',
-      dataIndex: 'amount',
-      key: 'amount',
-                    render: (amount) => amount?.toFixed(8)
-    },
-    {
-      title: '가격',
-      dataIndex: 'price',
-      key: 'price',
-                    render: (price) => `${price?.toLocaleString()}원`
-    },
-    {
-      title: '상태',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => {
-        const statusConfig = {
-                        pending: { color: 'processing', text: '대기' },
-          filled: { color: 'success', text: '체결' },
-          cancelled: { color: 'default', text: '취소' },
-          error: { color: 'error', text: '오류' }
-        };
-        const config = statusConfig[status] || statusConfig.pending;
-        return <Tag color={config.color}>{config.text}</Tag>;
-                    }
-                  }
-                ]}
-                pagination={{ pageSize: 5 }}
-                size="small"
-              />
-            </Card>
-          )}
         </Space>
       </MonitoringContainer>
     );
@@ -768,10 +705,10 @@ const Monitoring = () => {
         )}
 
         {/* 최근 거래 내역 */}
-        {tradingStatus?.recent_trades && tradingStatus.recent_trades.length > 0 && (
+        {tradingStatus?.trading?.trades && tradingStatus.trading.trades.length > 0 && (
           <Card title="최근 거래 내역">
             <Table
-              dataSource={tradingStatus.recent_trades}
+              dataSource={tradingStatus.trading.trades}
               columns={[
                 {
                   title: '시간',

@@ -171,11 +171,15 @@ const AIRecommendation = () => {
   // 현재 활성 전략 조회
   const loadActiveStrategy = async () => {
     try {
-      const response = await api.getActiveStrategy();
-      const data = response.data || response;
-      if (data.success && data.active_strategy) {
-        setActiveStrategy(data.active_strategy);
+      const response = await api.getTradingStatus();
+      if (response.is_trading && response.trading) {
+        setActiveStrategy({
+          strategy_name: response.trading.strategy_name || 'AI 추천 전략',
+          confidence_score: response.trading.confidence || 0.8,
+          risk_level: response.trading.risk_level || 'medium'
+        });
         setAutoTrading(true);
+        console.log('활성 전략 로드됨:', response.trading.strategy_name);
       }
     } catch (error) {
       console.error('활성 전략 조회 실패:', error);
