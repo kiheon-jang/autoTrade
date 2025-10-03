@@ -242,10 +242,60 @@ class MLSignalGenerator:
         
         return accuracy
     
+    def _generate_heuristic_signal(self, data: pd.DataFrame) -> MLSignal:
+        """모델이 훈련되지 않은 경우 휴리스틱 신호 생성"""
+        if len(data) < 20:
+            return MLSignal(
+                signal_type="HOLD",
+                confidence=0.5,
+                probability=0.5,
+                features_importance={},
+                timestamp=pd.Timestamp.now()
+            )
+        
+        # 간단한 이동평균 기반 신호
+        close_prices = data['close'].values
+        sma_20 = np.mean(close_prices[-20:])
+        sma_5 = np.mean(close_prices[-5:])
+        current_price = close_prices[-1]
+        
+        # RSI 계산
+        returns = np.diff(close_prices[-14:])
+        gains = np.where(returns > 0, returns, 0)
+        losses = np.where(returns < 0, -returns, 0)
+        avg_gain = np.mean(gains) if len(gains) > 0 else 0
+        avg_loss = np.mean(losses) if len(losses) > 0 else 0
+        
+        if avg_loss == 0:
+            rsi = 100
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+        
+        # 신호 결정
+        if sma_5 > sma_20 and rsi < 70:
+            signal_type = "BUY"
+            confidence = min(0.8, (sma_5 - sma_20) / sma_20 * 10)
+        elif sma_5 < sma_20 and rsi > 30:
+            signal_type = "SELL"
+            confidence = min(0.8, (sma_20 - sma_5) / sma_20 * 10)
+        else:
+            signal_type = "HOLD"
+            confidence = 0.5
+        
+        return MLSignal(
+            signal_type=signal_type,
+            confidence=max(0.3, confidence),
+            probability=max(0.3, confidence),
+            features_importance={"sma_cross": 0.5, "rsi": 0.3, "price_momentum": 0.2},
+            timestamp=pd.Timestamp.now()
+        )
+    
     def generate_signal(self, data: pd.DataFrame) -> MLSignal:
         """ML 신호 생성"""
         if not self.is_trained:
-            raise ValueError("모델이 훈련되지 않았습니다. train_models()를 먼저 실행하세요.")
+            # 모델이 훈련되지 않은 경우 휴리스틱 신호 생성
+            return self._generate_heuristic_signal(data)
         
         # 특성 생성
         df = self.create_features(data)

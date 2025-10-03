@@ -8,8 +8,8 @@ const useWebSocket = () => {
   const reconnectTimeoutRef = useRef(null);
   const pingIntervalRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 10;
-  const reconnectDelay = 3000; // 3초
+  const maxReconnectAttempts = 5;
+  const reconnectDelay = 5000; // 5초로 증가
 
   const connectWebSocket = useCallback(() => {
     try {
@@ -29,12 +29,12 @@ const useWebSocket = () => {
         setError(null);
         reconnectAttemptsRef.current = 0;
 
-        // Ping 메시지 전송 (30초마다)
+        // Ping 메시지 전송 (60초마다로 증가)
         pingIntervalRef.current = setInterval(() => {
           if (socketRef.current?.readyState === WebSocket.OPEN) {
             socketRef.current.send('ping');
           }
-        }, 30000);
+        }, 60000);
       };
 
       socketRef.current.onclose = (event) => {

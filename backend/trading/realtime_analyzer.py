@@ -78,6 +78,9 @@ class RealtimeMarketAnalyzer:
         # 코인 목록 초기화
         await self._update_coin_tiers()
         
+        # ML 모델 초기 훈련 (시스템 시작 시 한 번만)
+        await self._initialize_ml_models()
+        
         # 계층별 가격 스트림 시작
         asyncio.create_task(self._tier1_price_stream())  # 1초
         asyncio.create_task(self._tier2_price_stream())  # 5초
@@ -92,6 +95,53 @@ class RealtimeMarketAnalyzer:
         logger.info(f"📊 Tier 1 (1초): {len(self.tier1_coins)}개")
         logger.info(f"💎 Tier 2 (5초): {len(self.tier2_coins)}개")
         logger.info(f"📈 Tier 3 (30초): {len(self.tier3_coins)}개")
+    
+    async def _initialize_ml_models(self):
+        """ML 모델 초기 훈련 (전체 코인 대상)"""
+        if not self.ml_generator:
+            logger.warning("ML 생성기가 없어 훈련을 건너뜁니다")
+            return
+        
+        try:
+            logger.info("🤖 ML 모델 초기 훈련 시작...")
+            
+            # 모든 코인에 대해 훈련 데이터 수집
+            all_coins = list(set(self.tier1_coins + self.tier2_coins + self.tier3_coins))
+            training_data = []
+            
+            for symbol in all_coins[:20]:  # 처음 20개 코인만 (성능 고려)
+                try:
+                    candles = await self._get_candles(symbol, count=200)
+                    if candles is not None and len(candles) >= 50:
+                        # 특성 생성
+                        features = self.ml_generator.create_features(candles)
+                        if not features.empty:
+                            training_data.append(features)
+                            logger.info(f"✅ {symbol} 훈련 데이터 수집 완료")
+                except Exception as e:
+                    logger.warning(f"{symbol} 훈련 데이터 수집 실패: {e}")
+                    continue
+            
+            if training_data:
+                # 모든 데이터 결합
+                combined_data = pd.concat(training_data, ignore_index=True)
+                logger.info(f"📊 총 훈련 데이터: {len(combined_data)}개 샘플")
+                
+                # 특성과 타겟 준비
+                X, y = self.ml_generator.prepare_training_data(combined_data)
+                
+                if len(X) > 100:  # 최소 샘플 수 확인
+                    # 모델 훈련
+                    accuracy = self.ml_generator.train_models(X, y)
+                    logger.info(f"🎯 ML 모델 훈련 완료! 정확도: {accuracy:.3f}")
+                else:
+                    logger.warning("훈련 데이터가 부족하여 ML 모델 훈련을 건너뜁니다")
+            else:
+                logger.warning("수집된 훈련 데이터가 없어 ML 모델 훈련을 건너뜁니다")
+                
+        except Exception as e:
+            logger.error(f"ML 모델 초기 훈련 실패: {e}")
+            logger.info("휴리스틱 신호 생성 모드로 전환됩니다")
     
     async def stop(self):
         """실시간 분석 중지"""

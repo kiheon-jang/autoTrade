@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from core.config import settings
-from api import trading, monitoring, analysis, backtesting, realtime_trading, ai_recommendation
+from api import trading, monitoring, analysis, backtesting, realtime_trading, ai_recommendation, ml_models
 
 
 @asynccontextmanager
@@ -58,6 +58,7 @@ app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["분석"])
 app.include_router(backtesting.router, prefix="/api/v1/backtesting", tags=["백테스팅"])
 app.include_router(realtime_trading.router, prefix="/api/v1/realtime", tags=["실시간거래"])
 app.include_router(ai_recommendation.router, prefix="/api/v1/ai", tags=["AI추천"])
+app.include_router(ml_models.router, prefix="/api/v1", tags=["ML모델"])
 
 
 @app.get("/")
