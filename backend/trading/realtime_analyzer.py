@@ -474,6 +474,10 @@ class RealtimeMarketAnalyzer:
             reverse=True
         )
         
+        # 로그 추가: 상위 기회들 출력
+        if opportunities:
+            logger.info(f"🎯 상위 거래 기회: {[(o['symbol'], f'Tier{o['tier']}', f'{o['confidence']:.1%}') for o in opportunities[:5]]}")
+        
         return opportunities[:limit]
     
     def get_tier_status(self) -> Dict:

@@ -649,8 +649,9 @@ class AutoTradingEngine:
                 ml_signal = opp
                 
                 try:
-                    # 매수 조건: BUY 신호 + 신뢰도 50% 이상 (완화)
-                    if opp['signal'] == 'BUY' and opp['confidence'] > 0.5:
+                    # 매수 조건: BUY 신호 + 신뢰도 (Tier 1은 40%, 나머지는 50%)
+                    confidence_threshold = 0.4 if opp['tier'] == 1 else 0.5
+                    if opp['signal'] == 'BUY' and opp['confidence'] > confidence_threshold:
                         # 이미 포지션이 있거나 포지션 한도 초과
                         if symbol in self.positions:
                             continue
