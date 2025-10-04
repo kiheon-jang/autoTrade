@@ -15,7 +15,8 @@ import {
   Divider,
   Timeline,
   Badge,
-  Tooltip
+  Tooltip,
+  message
 } from 'antd';
 import {
   RobotOutlined,
@@ -99,6 +100,7 @@ const StatusIndicator = styled.div`
 
 const AIRecommendation = () => {
   const [loading, setLoading] = useState(false);
+  const [selectingStrategy, setSelectingStrategy] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
   const [marketAnalysis, setMarketAnalysis] = useState({});
   const [selectedStrategy, setSelectedStrategy] = useState(null);
@@ -135,6 +137,9 @@ const AIRecommendation = () => {
 
   // 전략 선택
   const selectStrategy = async (strategy) => {
+    if (selectingStrategy) return; // 이미 처리 중이면 무시
+    
+    setSelectingStrategy(true);
     try {
       const response = await api.selectStrategy({
         strategy_id: strategy.strategy_id,
@@ -147,9 +152,15 @@ const AIRecommendation = () => {
         setSelectedStrategy(strategy);
         setActiveStrategy(data.strategy);
         setAutoTrading(true);
+        message.success(`전략 '${strategy.strategy_name}'이 선택되었습니다.`);
+      } else {
+        message.error(`전략 선택 실패: ${data.message}`);
       }
     } catch (error) {
       console.error('전략 선택 실패:', error);
+      message.error('전략 선택 중 오류가 발생했습니다.');
+    } finally {
+      setSelectingStrategy(false);
     }
   };
 
@@ -274,9 +285,11 @@ const AIRecommendation = () => {
             size="small"
             icon={<PlayCircleOutlined />}
             onClick={() => selectStrategy(record)}
-            disabled={record.strategy_id === selectedStrategy?.strategy_id}
+            loading={selectingStrategy}
+            disabled={selectingStrategy || (autoTrading && record.strategy_id === selectedStrategy?.strategy_id)}
           >
-            선택
+            {selectingStrategy ? '처리중...' : 
+             (autoTrading && record.strategy_id === selectedStrategy?.strategy_id) ? '실행중' : '선택'}
           </Button>
           <Tooltip title={record.recommendation_reason}>
             <Button size="small" icon={<InfoCircleOutlined />}>
