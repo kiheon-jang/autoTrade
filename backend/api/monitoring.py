@@ -142,15 +142,24 @@ async def get_ai_strategy_details():
             "max_drawdown": status.get('max_drawdown', 0)
         }
         
-        # 전략 정보 가져오기
+        # 전략 정보 가져오기 - AI 추천 전략에서 실제 전략명 가져오기
         strategy_name = "AI 추천 전략"
         strategy_type = "ai_recommended"
         
-        # 현재 실행 중인 전략 정보 확인
+        # AI 추천 전략 정보에서 실제 전략명 가져오기
+        try:
+            from api.ai_recommendation import active_strategy
+            if active_strategy and 'recommendation' in active_strategy:
+                strategy_name = active_strategy['recommendation'].strategy_name
+                strategy_type = active_strategy['recommendation'].strategy_type
+        except Exception as e:
+            logger.warning(f"AI 추천 전략 정보 가져오기 실패: {e}")
+        
+        # 현재 실행 중인 전략 정보 확인 (백업)
         if hasattr(trading_engine, 'current_strategy') and trading_engine.current_strategy:
             strategy_info = trading_engine.current_strategy
-            strategy_name = strategy_info.get('strategy_name', 'AI 추천 전략')
-            strategy_type = strategy_info.get('strategy_type', 'ai_recommended')
+            strategy_name = strategy_info.get('strategy_name', strategy_name)
+            strategy_type = strategy_info.get('strategy_type', strategy_type)
         
         # 최근 거래 내역 포맷팅
         recent_trades = []
