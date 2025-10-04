@@ -16,7 +16,9 @@ import {
   SearchOutlined,
   FireOutlined,
   CrownOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  PlayCircleOutlined,
+  StopOutlined
 } from '@ant-design/icons';
 import styled from 'styled-components';
 import api from '../services/api';
@@ -108,6 +110,27 @@ const Monitoring = () => {
       setAiStrategyDetails(data);
     } catch (error) {
       console.error('AI 전략 상세 정보 조회 실패:', error);
+    }
+  };
+
+  const handleStopTrading = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/trading/stop`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        console.log('거래가 성공적으로 중지되었습니다.');
+        // 상태 업데이트
+        await Promise.all([
+          fetchTradingStatus(),
+          fetchAiStrategyDetails()
+        ]);
+      } else {
+        throw new Error('거래 중지 실패');
+      }
+    } catch (error) {
+      console.error('거래 중지 오류:', error);
     }
   };
 
