@@ -495,6 +495,91 @@ const Monitoring = () => {
             </Row>
           </Card>
 
+          {/* 실시간 분석 진행 상황 */}
+          <Card 
+            title={
+              <Space>
+                <SearchOutlined spin />
+                <span>실시간 분석 진행 상황</span>
+                <Badge count={tradingStatus?.analysis?.scanning_coins || 0} style={{ backgroundColor: '#1890ff' }} />
+              </Space>
+            }
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#fff7e6', borderLeft: '4px solid #fa8c16' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <FireOutlined style={{ color: '#fa8c16', fontSize: 20 }} />
+                      <Text strong>Tier 1 분석 중</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus?.analysis?.tiers?.tier1?.count || 0}개 코인
+                    </Title>
+                    <Text type="secondary">거래량 급등 감지 (1초마다)</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus?.analysis?.tiers?.tier1?.coins?.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="orange">{coin}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.tiers?.tier1?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">분석 중: 거래량 급등 패턴, 가격 변동성, 매수/매도 압력</Text>
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+              
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#f6ffed', borderLeft: '4px solid #52c41a' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <CrownOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                      <Text strong>Tier 2 분석 중</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus?.analysis?.tiers?.tier2?.count || 0}개 코인
+                    </Title>
+                    <Text type="secondary">핵심 코인 모니터링 (5초마다)</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus?.analysis?.tiers?.tier2?.coins?.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="green">{coin}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.tiers?.tier2?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">분석 중: 기술적 지표, 추세 분석, 지지/저항선</Text>
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+              
+              <Col xs={24} md={8}>
+                <Card size="small" style={{ background: '#e6f7ff', borderLeft: '4px solid #1890ff' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <TrophyOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+                      <Text strong>Tier 3 분석 중</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus?.analysis?.tiers?.tier3?.count || 0}개 코인
+                    </Title>
+                    <Text type="secondary">시가총액 상위 스캔 (30초마다)</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="blue">{coin}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">분석 중: 시장 전체 동향, 상관관계, 리스크 평가</Text>
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
+          </Card>
+
           {/* 매수/매도 신호 현황 */}
           <Card 
             title={
