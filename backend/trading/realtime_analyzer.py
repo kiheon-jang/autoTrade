@@ -38,10 +38,10 @@ class RealtimeMarketAnalyzer:
         # 계층별 코인 목록 (동적 업데이트)
         self.tier1_coins: List[str] = []  # 거래량 급등
         self.tier2_coins: List[str] = self.CORE_COINS[:20]  # 핵심 코인
-        self.tier3_coins: List[str] = []  # 시가총액 상위
+        self.tier3_coins: List[str] = []  # 시가총액 상위 (실제 데이터로 계산)
         
         # 전체 코인 목록
-        self.all_coins: Set[str] = set()
+        self.all_coins: Set[str] = set(self.tier1_coins + self.tier2_coins + self.tier3_coins)
         
         # 실시간 가격 저장
         self.current_prices: Dict[str, float] = {}
@@ -77,6 +77,9 @@ class RealtimeMarketAnalyzer:
         
         # 코인 목록 초기화
         await self._update_coin_tiers()
+        
+        # Tier3 코인 초기 업데이트 (시가총액 기반)
+        await self._update_tier3_coins()
         
         # ML 모델 초기 훈련 (시스템 시작 시 한 번만)
         await self._initialize_ml_models()
@@ -242,6 +245,11 @@ class RealtimeMarketAnalyzer:
                 await asyncio.sleep(3600)  # 1시간
                 logger.info("🔄 코인 티어 재구성 중...")
                 await self._update_coin_tiers()
+                
+                # Tier3 코인 업데이트 (시가총액 기반)
+                logger.info("📊 Tier3 코인 시가총액 기반 업데이트 중...")
+                await self._update_tier3_coins()
+                
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -508,6 +516,81 @@ class RealtimeMarketAnalyzer:
             return 3
         return 0
     
+    async def _update_tier3_coins(self):
+        """시가총액 기반으로 tier3 코인 업데이트"""
+        try:
+            # 빗썸에서 모든 코인 정보 가져오기
+            all_tickers = await self.bithumb_client.get_all_tickers()
+            
+            if not all_tickers:
+                logger.warning("빗썸에서 티커 정보를 가져올 수 없습니다")
+                return
+            
+            # 시가총액 계산을 위한 데이터 준비
+            market_cap_data = []
+            
+            for symbol, ticker_data in all_tickers.items():
+                try:
+                    # 현재 가격
+                    current_price = float(ticker_data.get('closing_price', 0))
+                    
+                    # 24시간 거래량 (KRW)
+                    volume_24h = float(ticker_data.get('acc_trade_value_24H', 0))
+                    
+                    # 거래량 기반 시가총액 추정 (실제 시가총액은 공급량이 필요하지만 거래량으로 근사)
+                    if current_price > 0 and volume_24h > 0:
+                        # 거래량이 높은 코인을 시가총액이 높다고 가정
+                        estimated_market_cap = volume_24h * 100  # 거래량의 100배를 시가총액으로 근사
+                        
+                        market_cap_data.append({
+                            'symbol': symbol,
+                            'price': current_price,
+                            'volume_24h': volume_24h,
+                            'estimated_market_cap': estimated_market_cap
+                        })
+                        
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"{symbol} 데이터 파싱 오류: {e}")
+                    continue
+            
+            # 시가총액 순으로 정렬
+            market_cap_data.sort(key=lambda x: x['estimated_market_cap'], reverse=True)
+            
+            # 상위 70개 코인을 tier3로 설정 (tier1, tier2와 중복 제거)
+            tier3_candidates = []
+            tier1_set = set(self.tier1_coins)
+            tier2_set = set(self.tier2_coins)
+            
+            for coin_data in market_cap_data:
+                symbol = coin_data['symbol']
+                if symbol not in tier1_set and symbol not in tier2_set:
+                    tier3_candidates.append(symbol)
+                    if len(tier3_candidates) >= 70:
+                        break
+            
+            # tier3 업데이트
+            old_tier3 = set(self.tier3_coins)
+            self.tier3_coins = tier3_candidates
+            new_tier3 = set(self.tier3_coins)
+            
+            # 변경사항 로깅
+            if old_tier3 != new_tier3:
+                logger.info(f"Tier3 코인 업데이트: {len(self.tier3_coins)}개 코인")
+                logger.debug(f"Tier3 코인: {self.tier3_coins[:10]}...")  # 상위 10개만 로깅
+            
+            # 전체 코인 집합 업데이트
+            self.all_coins = set(self.tier1_coins + self.tier2_coins + self.tier3_coins)
+            
+        except Exception as e:
+            logger.error(f"Tier3 코인 업데이트 실패: {e}")
+            # 실패 시 기본 코인들로 fallback
+            if not self.tier3_coins:
+                self.tier3_coins = [
+                    'BTC', 'ETH', 'XRP', 'ADA', 'SOL', 'DOT', 'DOGE', 'MATIC', 'LINK', 'UNI',
+                    'AVAX', 'ATOM', 'LTC', 'ETC', 'BCH', 'NEAR', 'ALGO', 'MANA', 'SAND', 'AXS'
+                ]
+                self.all_coins = set(self.tier1_coins + self.tier2_coins + self.tier3_coins)
+    
     def get_top_opportunities(self, limit: int = 10) -> List[Dict]:
         """거래 기회 상위 N개 반환"""
         opportunities = []
@@ -540,6 +623,9 @@ class RealtimeMarketAnalyzer:
     
     def get_tier_status(self) -> Dict:
         """티어 상태 정보 반환"""
+        # 전체 코인 집합 업데이트
+        self.all_coins = set(self.tier1_coins + self.tier2_coins + self.tier3_coins)
+        
         return {
             'tier1': {
                 'name': '거래량 급등',
@@ -555,6 +641,7 @@ class RealtimeMarketAnalyzer:
             },
             'tier3': {
                 'name': '시가총액 상위',
+                'coins': self.tier3_coins,
                 'count': len(self.tier3_coins),
                 'interval': '30초'
             },
