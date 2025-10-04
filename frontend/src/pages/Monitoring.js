@@ -109,6 +109,10 @@ const Monitoring = () => {
   const fetchTradingStatus = async () => {
     try {
       const response = await aiRecommendationAPI.getTradingStatus();
+      console.log('전체 응답:', response);
+      console.log('거래 상태:', response.is_trading);
+      console.log('거래 데이터:', response.trading);
+      console.log('거래 내역:', response.trading?.trades);
       
       if (response.is_trading) {
         console.log('거래 데이터:', response.trading?.trades?.slice(0, 3));
@@ -236,8 +240,13 @@ const Monitoring = () => {
                     <Text style={{ color: 'rgba(255,255,255,0.8)' }}>실행 전략</Text>
                     <br />
                     <Title level={4} style={{ color: 'white', margin: 0 }}>
-                      {trading.mode === 'paper' ? '📝 페이퍼 트레이딩' : '💰 실거래'}
+                      {strategy?.name || 'AI 추천 전략'}
                     </Title>
+                    <div style={{ marginTop: 4 }}>
+                      <Tag color={trading.mode === 'paper' ? 'blue' : 'green'} style={{ color: 'white' }}>
+                        {trading.mode === 'paper' ? '📝 페이퍼 트레이딩' : '💰 실거래'}
+                      </Tag>
+                    </div>
                   </div>
                 </Space>
               </Col>
@@ -534,8 +543,13 @@ const Monitoring = () => {
                   <Text style={{ color: 'rgba(255,255,255,0.8)' }}>실행 전략</Text>
                   <br />
                   <Title level={4} style={{ color: 'white', margin: 0 }}>
-                    {tradingStatus?.mode === 'paper' ? '📝 페이퍼 트레이딩' : '💰 실거래'}
+                    {tradingStatus?.strategy?.name || '전통적 전략'}
                   </Title>
+                  <div style={{ marginTop: 4 }}>
+                    <Tag color={tradingStatus?.mode === 'paper' ? 'blue' : 'green'} style={{ color: 'white' }}>
+                      {tradingStatus?.mode === 'paper' ? '📝 페이퍼 트레이딩' : '💰 실거래'}
+                    </Tag>
+                  </div>
                 </div>
               </Space>
             </Col>
@@ -705,10 +719,13 @@ const Monitoring = () => {
         )}
 
         {/* 최근 거래 내역 */}
-        {tradingStatus?.trading?.trades && tradingStatus.trading.trades.length > 0 && (
+        {console.log('렌더링 체크 - tradingStatus:', tradingStatus)}
+        {console.log('렌더링 체크 - trades:', tradingStatus?.trading?.trades)}
+        {console.log('렌더링 체크 - trades length:', tradingStatus?.trading?.trades?.length)}
+        {tradingStatus?.trading && (
           <Card title="최근 거래 내역">
             <Table
-              dataSource={tradingStatus.trading.trades}
+              dataSource={tradingStatus.trading.trades || []}
               columns={[
                 {
                   title: '시간',
@@ -748,6 +765,9 @@ const Monitoring = () => {
               ]}
               pagination={{ pageSize: 5 }}
               size="small"
+              locale={{
+                emptyText: '거래 내역이 없습니다.'
+              }}
             />
           </Card>
         )}
