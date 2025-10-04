@@ -568,6 +568,16 @@ class RealtimeMarketAnalyzer:
                     if len(tier3_candidates) >= 70:
                         break
             
+            # 만약 tier3 후보가 부족하면 전체 시장에서 추가
+            if len(tier3_candidates) < 30:
+                logger.warning(f"Tier3 후보 부족 ({len(tier3_candidates)}개), 전체 시장에서 추가")
+                for coin_data in market_cap_data:
+                    symbol = coin_data['symbol']
+                    if symbol not in tier1_set and symbol not in tier2_set and symbol not in tier3_candidates:
+                        tier3_candidates.append(symbol)
+                        if len(tier3_candidates) >= 70:
+                            break
+            
             # tier3 업데이트
             old_tier3 = set(self.tier3_coins)
             self.tier3_coins = tier3_candidates
