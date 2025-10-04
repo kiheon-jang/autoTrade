@@ -477,15 +477,72 @@ const Monitoring = () => {
                   <Space direction="vertical">
                     <Space>
                       <TrophyOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-                      <Text strong>매수/매도 신호</Text>
+                      <Text strong>Tier 3: 시가총액 상위</Text>
                     </Space>
                     <Title level={4} style={{ margin: 0 }}>
-                      {tradingStatus?.analysis?.buy_signals || 0} / {tradingStatus?.analysis?.sell_signals || 0}
+                      {tradingStatus?.analysis?.tiers?.tier3?.count || 0}개
                     </Title>
-                    <Text type="secondary">실시간 신호</Text>
+                    <Text type="secondary">30초마다 스캔</Text>
                     <div style={{ marginTop: 8 }}>
-                      <Tag color="green">매수 {tradingStatus?.analysis?.buy_signals || 0}</Tag>
-                      <Tag color="red">매도 {tradingStatus?.analysis?.sell_signals || 0}</Tag>
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="blue">{coin}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
+          </Card>
+
+          {/* 매수/매도 신호 현황 */}
+          <Card 
+            title={
+              <Space>
+                <SearchOutlined spin />
+                <span>실시간 거래 신호</span>
+                <Badge count={(tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length || 0) + (tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length || 0)} style={{ backgroundColor: '#52c41a' }} />
+              </Space>
+            }
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={12}>
+                <Card size="small" style={{ background: '#f6ffed', borderLeft: '4px solid #52c41a' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <RiseOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                      <Text strong>매수 신호</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length || 0}개
+                    </Title>
+                    <Text type="secondary">BUY 신호 감지</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').slice(0, 5).map(opp => (
+                        <Tag key={opp.symbol} color="green">{opp.symbol}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length > 5 && <Text type="secondary">...</Text>}
+                    </div>
+                  </Space>
+                </Card>
+              </Col>
+              
+              <Col xs={24} sm={12}>
+                <Card size="small" style={{ background: '#fff2f0', borderLeft: '4px solid #ff4d4f' }}>
+                  <Space direction="vertical">
+                    <Space>
+                      <FallOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+                      <Text strong>매도 신호</Text>
+                    </Space>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length || 0}개
+                    </Title>
+                    <Text type="secondary">SELL 신호 감지</Text>
+                    <div style={{ marginTop: 8 }}>
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').slice(0, 5).map(opp => (
+                        <Tag key={opp.symbol} color="red">{opp.symbol}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length > 5 && <Text type="secondary">...</Text>}
                     </div>
                   </Space>
                 </Card>
@@ -779,7 +836,7 @@ const Monitoring = () => {
               <Space>
                 <SearchOutlined spin />
                 <span>실시간 시장 분석</span>
-                <Badge count={tradingStatus.analysis.scanning_coins} style={{ backgroundColor: '#52c41a' }} />
+                <Badge count={tradingStatus?.analysis?.scanning_coins} style={{ backgroundColor: '#52c41a' }} />
               </Space>
             }
           >
@@ -792,14 +849,14 @@ const Monitoring = () => {
                       <Text strong>Tier 1: 거래량 급등</Text>
                     </Space>
                     <Title level={4} style={{ margin: 0 }}>
-                      {tradingStatus.analysis.tiers?.tier1?.count || 0}개
+                      {tradingStatus?.analysis?.tiers?.tier1?.count || 0}개
                     </Title>
                     <Text type="secondary">1초마다 스캔</Text>
                     <div style={{ marginTop: 8 }}>
-                      {tradingStatus.analysis.tiers?.tier1?.coins?.slice(0, 5).map(coin => (
+                      {tradingStatus?.analysis?.tiers?.tier1?.coins?.slice(0, 5).map(coin => (
                         <Tag key={coin} color="orange">{coin}</Tag>
                       ))}
-                      {tradingStatus.analysis.tiers?.tier1?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                      {tradingStatus?.analysis?.tiers?.tier1?.coins?.length > 5 && <Text type="secondary">...</Text>}
                     </div>
                   </Space>
                 </Card>
@@ -813,14 +870,14 @@ const Monitoring = () => {
                       <Text strong>Tier 2: 핵심 코인</Text>
                     </Space>
                     <Title level={4} style={{ margin: 0 }}>
-                      {tradingStatus.analysis.tiers?.tier2?.count || 0}개
+                      {tradingStatus?.analysis?.tiers?.tier2?.count || 0}개
                     </Title>
                     <Text type="secondary">5초마다 스캔</Text>
                     <div style={{ marginTop: 8 }}>
-                      {tradingStatus.analysis.tiers?.tier2?.coins?.slice(0, 5).map(coin => (
+                      {tradingStatus?.analysis?.tiers?.tier2?.coins?.slice(0, 5).map(coin => (
                         <Tag key={coin} color="green">{coin}</Tag>
                       ))}
-                      {tradingStatus.analysis.tiers?.tier2?.coins?.length > 5 && <Text type="secondary">...</Text>}
+                      {tradingStatus?.analysis?.tiers?.tier2?.coins?.length > 5 && <Text type="secondary">...</Text>}
                     </div>
                   </Space>
                 </Card>
@@ -831,20 +888,77 @@ const Monitoring = () => {
                   <Space direction="vertical">
                     <Space>
                       <TrophyOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-                      <Text strong>매수/매도 신호</Text>
+                      <Text strong>Tier 3: 시가총액 상위</Text>
                     </Space>
                     <Title level={4} style={{ margin: 0 }}>
-                      {tradingStatus.analysis.buy_signals || 0} / {tradingStatus.analysis.sell_signals || 0}
+                      {tradingStatus?.analysis?.tiers?.tier3?.count || 0}개
                     </Title>
-                    <Text type="secondary">실시간 신호</Text>
+                    <Text type="secondary">30초마다 스캔</Text>
                     <div style={{ marginTop: 8 }}>
-                      <Tag color="green">매수 {tradingStatus.analysis.buy_signals || 0}</Tag>
-                      <Tag color="red">매도 {tradingStatus.analysis.sell_signals || 0}</Tag>
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.slice(0, 5).map(coin => (
+                        <Tag key={coin} color="blue">{coin}</Tag>
+                      ))}
+                      {tradingStatus?.analysis?.tiers?.tier3?.coins?.length > 5 && <Text type="secondary">...</Text>}
                     </div>
                   </Space>
                 </Card>
               </Col>
             </Row>
+
+            {/* 매수/매도 신호 현황 */}
+            <Card 
+              title={
+                <Space>
+                  <SearchOutlined spin />
+                  <span>실시간 거래 신호</span>
+                  <Badge count={(tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length || 0) + (tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length || 0)} style={{ backgroundColor: '#52c41a' }} />
+                </Space>
+              }
+            >
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={12}>
+                  <Card size="small" style={{ background: '#f6ffed', borderLeft: '4px solid #52c41a' }}>
+                    <Space direction="vertical">
+                      <Space>
+                        <RiseOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                        <Text strong>매수 신호</Text>
+                      </Space>
+                      <Title level={4} style={{ margin: 0 }}>
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length || 0}개
+                      </Title>
+                      <Text type="secondary">BUY 신호 감지</Text>
+                      <div style={{ marginTop: 8 }}>
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').slice(0, 5).map(opp => (
+                          <Tag key={opp.symbol} color="green">{opp.symbol}</Tag>
+                        ))}
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'BUY').length > 5 && <Text type="secondary">...</Text>}
+                      </div>
+                    </Space>
+                  </Card>
+                </Col>
+                
+                <Col xs={24} sm={12}>
+                  <Card size="small" style={{ background: '#fff2f0', borderLeft: '4px solid #ff4d4f' }}>
+                    <Space direction="vertical">
+                      <Space>
+                        <FallOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+                        <Text strong>매도 신호</Text>
+                      </Space>
+                      <Title level={4} style={{ margin: 0 }}>
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length || 0}개
+                      </Title>
+                      <Text type="secondary">SELL 신호 감지</Text>
+                      <div style={{ marginTop: 8 }}>
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').slice(0, 5).map(opp => (
+                          <Tag key={opp.symbol} color="red">{opp.symbol}</Tag>
+                        ))}
+                        {tradingStatus?.analysis?.top_opportunities?.filter(o => o.signal === 'SELL').length > 5 && <Text type="secondary">...</Text>}
+                      </div>
+                    </Space>
+                  </Card>
+                </Col>
+              </Row>
+            </Card>
           </Card>
         )}
       </Space>
